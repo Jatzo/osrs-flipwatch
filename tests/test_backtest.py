@@ -268,6 +268,26 @@ class TestResults:
         assert result.realised_profit == 10 * (1_100 - 22 - 1_000)
         assert result.profit_per_hour == pytest.approx(780 / 1.0)
 
+    def test_period_is_trimmed_to_the_data(self) -> None:
+        plan = {at(0): [buy(10)], at(1): [sell(10)]}
+        windows = [replace(w, timestamp=w.timestamp + 2 * HOUR) for w in steady(12)]
+
+        result = run_backtest(
+            Scripted({t + 2 * HOUR: o for t, o in plan.items()}),
+            windows,
+            {1: make_item()},
+            STEP,
+            T0,
+            T0 + 24 * HOUR,
+        )
+
+        assert (result.start, result.end) == (T0 + 2 * HOUR, T0 + 3 * HOUR)
+        assert result.profit_per_hour == pytest.approx(780)
+
+    def test_no_data_is_an_error(self) -> None:
+        with pytest.raises(ValueError, match="no price data"):
+            run_backtest(Scripted(), [], {1: make_item()}, STEP, T0, T0 + HOUR)
+
     def test_equity_curve_has_a_point_per_window(self) -> None:
         result = run(Scripted(), steady(5))
 

@@ -368,13 +368,21 @@ def run_backtest(
     end: int,
     settings: BacktestSettings | None = None,
 ) -> BacktestResult:
-    """Run `strategy` over the windows that start at or after `start` and close by `end`."""
+    """Run `strategy` over the windows that start at or after `start` and close by `end`.
+
+    The result covers the period the data actually spans, which can be shorter than the
+    one asked for, so profit per hour is not diluted by hours with no data.
+    """
     settings = settings or BacktestSettings()
     tradeable = {item_id: item for item_id, item in items.items() if item.buy_limit is not None}
     by_time: dict[int, dict[int, PriceWindow]] = defaultdict(dict)
     for window in windows:
         if window.item_id in tradeable and start <= window.timestamp <= end - timestep_seconds:
             by_time[window.timestamp][window.item_id] = window
+    if not by_time:
+        raise ValueError("no price data for tradeable items in the backtest period")
+    start = min(by_time)
+    end = max(by_time) + timestep_seconds
 
     portfolio = _Portfolio(settings, tradeable, cash=settings.starting_capital)
     histories: dict[int, list[PriceWindow]] = defaultdict(list)
