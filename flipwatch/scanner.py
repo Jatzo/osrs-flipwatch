@@ -83,34 +83,56 @@ def evaluate(
     now: float,
 ) -> Opportunity | None:
     """Build an opportunity for one item, or return None if it fails a filter."""
+    opportunity, _ = assess(item, price, window, settings, now)
+    return opportunity
+
+
+def assess(
+    item: Item,
+    price: LatestPrice | None,
+    window: PriceWindow | None,
+    settings: ScanSettings,
+    now: float,
+) -> tuple[Opportunity | None, str | None]:
+    """Return the opportunity for one item, or None and the first filter it fails."""
     if item.id in EXCLUDED_ITEM_IDS:
-        return None
+        return None, "excluded from tracking"
     if settings.members is not None and item.members != settings.members:
-        return None
+        return None, "members item" if item.members else "free to play item"
+    if price is None or price.low is None or price.high is None or price.low <= 0:
+        return None, "no recent instant buy and sell prices"
     if not _is_fresh(price, settings.freshness_seconds, now):
-        return None
+        return None, f"prices are older than {settings.freshness_seconds // 60} minutes"
 
     buy_price, sell_price = price.low, price.high
-    if buy_price is None or sell_price is None or buy_price <= 0:
-        return None
     if settings.max_buy_price is not None and buy_price > settings.max_buy_price:
-        return None
+        return None, f"buy price above {settings.max_buy_price:,} gp"
 
     tax = ge_tax(sell_price, item.id)
     margin = sell_price - buy_price - tax
     roi = margin / buy_price
-    if margin <= 0 or margin < settings.min_margin or roi < settings.min_roi:
-        return None
+    if margin <= 0:
+        return None, "no margin after tax"
+    if margin < settings.min_margin:
+        return None, f"margin under {settings.min_margin:,} gp"
+    if roi < settings.min_roi:
+        return None, f"ROI under {settings.min_roi:.1%}"
 
+    if window is None:
+        return None, "no trades in the last hour"
     tradeable_volume = min(window.low_volume, window.high_volume)
     if tradeable_volume < settings.min_volume:
-        return None
+        return None, f"fewer than {settings.min_volume:,} trades an hour on the thinner side"
 
     quantity = realistic_quantity(item.buy_limit, tradeable_volume, settings)
-    if not quantity or margin * quantity < settings.min_profit:
-        return None
+    if quantity is None:
+        return None, "no listed buy limit"
+    if quantity == 0:
+        return None, "too little volume to trade any"
+    if margin * quantity < settings.min_profit:
+        return None, f"potential profit under {settings.min_profit:,} gp"
 
-    return Opportunity(
+    opportunity = Opportunity(
         item=item,
         buy_price=buy_price,
         sell_price=sell_price,
@@ -123,6 +145,7 @@ def evaluate(
         potential_profit=margin * quantity,
         confidence=confidence(price, window, settings),
     )
+    return opportunity, None
 
 
 def realistic_quantity(

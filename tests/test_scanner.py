@@ -8,6 +8,7 @@ from flipwatch.scanner import (
     NoLimitPolicy,
     ScanSettings,
     SortKey,
+    assess,
     confidence,
     evaluate,
     rank,
@@ -356,3 +357,68 @@ def test_scan_over_real_fixtures(
     death_rune, feather = without_floors[2:]
     assert (death_rune.tax, death_rune.margin, death_rune.quantity) == (3, 2, 25_000)
     assert (feather.tax, feather.margin, feather.confidence.score) == (0, 1, 100)
+
+
+class TestSkipReasons:
+    def reason(
+        self,
+        item: Item | None = None,
+        price: LatestPrice | None = None,
+        window: PriceWindow | None = None,
+        settings: ScanSettings = SETTINGS,
+        no_window: bool = False,
+        no_price: bool = False,
+    ) -> str | None:
+        opportunity, reason = assess(
+            item or make_item(),
+            None if no_price else price or make_price(),
+            None if no_window else window or make_window(),
+            settings,
+            NOW,
+        )
+        assert (opportunity is None) == (reason is not None)
+        return reason
+
+    def test_passing_item_has_no_reason(self) -> None:
+        assert self.reason() is None
+
+    @pytest.mark.parametrize(
+        ("kwargs", "expected"),
+        [
+            ({"item": make_item(13190)}, "excluded from tracking"),
+            ({"settings": replace(SETTINGS, members=False)}, "members item"),
+            ({"no_price": True}, "no recent instant buy and sell prices"),
+            (
+                {"price": make_price(low=None, low_time=None)},
+                "no recent instant buy and sell prices",
+            ),
+            ({"price": make_price(high_time=NOW - 601)}, "prices are older than 10 minutes"),
+            ({"settings": replace(SETTINGS, max_buy_price=999)}, "buy price above 999 gp"),
+            ({"price": make_price(high=1_020)}, "no margin after tax"),
+            ({"settings": replace(SETTINGS, min_margin=79)}, "margin under 79 gp"),
+            ({"settings": replace(SETTINGS, min_roi=0.1)}, "ROI under 10.0%"),
+            ({"no_window": True}, "no trades in the last hour"),
+            (
+                {"window": make_window(low_volume=49)},
+                "fewer than 50 trades an hour on the thinner side",
+            ),
+            ({"item": make_item(buy_limit=None)}, "no listed buy limit"),
+            (
+                {
+                    "window": make_window(low_volume=9, high_volume=9),
+                    "settings": replace(SETTINGS, min_volume=0),
+                },
+                "too little volume to trade any",
+            ),
+            ({"settings": DEFAULTS}, "potential profit under 500,000 gp"),
+        ],
+    )
+    def test_reason_names_the_first_failed_filter(
+        self, kwargs: dict[str, Any], expected: str
+    ) -> None:
+        assert self.reason(**kwargs) == expected
+
+    def test_free_to_play_filter_names_the_item_type(self) -> None:
+        reason = self.reason(make_item(members=False), settings=replace(SETTINGS, members=True))
+
+        assert reason == "free to play item"
