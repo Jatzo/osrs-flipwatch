@@ -1,4 +1,4 @@
-"""Dataclasses for item metadata and price data from the OSRS Wiki prices API.
+"""Dataclasses for item metadata, price data and flip opportunities.
 
 Prices are whole coins and times are Unix timestamps in seconds, as the API returns them.
 """
@@ -87,3 +87,39 @@ class PriceWindow:
             avg_low_price=record["avgLowPrice"],
             low_volume=record["lowPriceVolume"],
         )
+
+
+@dataclass(frozen=True)
+class Confidence:
+    """How far to trust a margin, from 0 to 100.
+
+    The score is liquidity multiplied by stability, so weakness in either one pulls it down.
+    """
+
+    score: int
+    liquidity: float
+    stability: float
+
+
+@dataclass(frozen=True)
+class Opportunity:
+    """A possible flip: buy near the instant sell price, sell near the instant buy price."""
+
+    item: Item
+    buy_price: int
+    sell_price: int
+    tax: int
+    margin: int
+    roi: float
+    # Hourly volumes. A buy offer fills against instant sellers (the low side) and a
+    # sell offer fills against instant buyers (the high side).
+    low_volume: int
+    high_volume: int
+    quantity: int
+    potential_profit: int
+    confidence: Confidence
+
+    @property
+    def tradeable_volume(self) -> int:
+        """The thinner side of the market, which limits how much can be flipped."""
+        return min(self.low_volume, self.high_volume)
