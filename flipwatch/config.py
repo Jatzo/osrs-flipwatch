@@ -69,6 +69,15 @@ GE_TAX_EXEMPT_ITEM_IDS: frozenset[int] = frozenset(
     }
 )
 
+# Items that are never worth flipping, so they are left out of scans and stored data.
+EXCLUDED_ITEM_IDS: frozenset[int] = frozenset(
+    {
+        # A bond bought on the GE becomes untradeable, and making it tradeable again
+        # costs 10% of its value, which is far more than any normal margin.
+        13190,  # Old school bond
+    }
+)
+
 
 class ConfigError(Exception):
     """Raised when a required setting is missing or a value is invalid."""

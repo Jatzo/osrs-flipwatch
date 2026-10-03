@@ -83,9 +83,9 @@ class TestMetrics:
         assert opportunity.potential_profit == 78 * 500
 
     def test_exempt_item_pays_no_tax(self) -> None:
-        bond = make_item(13190)
+        lobster = make_item(379)
 
-        opportunity = evaluate_one(bond, make_price(13190), make_window(13190))
+        opportunity = evaluate_one(lobster, make_price(379), make_window(379))
 
         assert opportunity is not None
         assert opportunity.tax == 0
@@ -103,6 +103,11 @@ class TestMetrics:
 
 
 class TestFilters:
+    def test_excluded_item_is_skipped(self) -> None:
+        bond = make_item(13190)
+
+        assert evaluate_one(bond, make_price(13190), make_window(13190)) is None
+
     def test_negative_margin_after_tax_is_skipped(self) -> None:
         assert evaluate_one(price=make_price(high=1_019, low=1_000)) is None
 
@@ -312,13 +317,11 @@ def test_scan_over_real_fixtures(
 
     ranked = rank(scan(items, latest, hourly, DEFAULTS, NOW))
 
-    # The whip loses money after tax, the cannon base trades too thinly, the 3rd Age
-    # items are stale and have no hourly volume, and item 2660 is not in the mapping.
-    assert [o.item.name for o in ranked] == ["Old school bond", "Death rune", "Feather"]
+    # The bond is excluded, the whip loses money after tax, the cannon base trades too
+    # thinly, the 3rd Age items are stale and have no hourly volume, and item 2660 is
+    # not in the mapping.
+    assert [o.item.name for o in ranked] == ["Death rune", "Feather"]
 
-    bond, death_rune, feather = ranked
-    assert (bond.tax, bond.margin, bond.quantity) == (0, 546_418, 25)
-    assert bond.potential_profit == 13_660_450
-    assert bond.confidence.score == 57
+    death_rune, feather = ranked
     assert (death_rune.tax, death_rune.margin, death_rune.quantity) == (3, 2, 25_000)
     assert (feather.tax, feather.margin, feather.confidence.score) == (0, 1, 100)

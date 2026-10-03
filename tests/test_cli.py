@@ -89,15 +89,14 @@ def test_scan_prints_ranked_table(
         "Vol/h", "Qty", "Profit", "Conf", "Liq", "Stab",
     ]  # fmt: skip
     assert [row.split("  ")[0].strip() for row in rows] == [
-        "Old school bond",
         "Death rune",
         "Feather",
     ]
     assert rows[0].split() == [
-        "Old", "school", "bond", "10,850,003", "11,396,421", "546,418", "5.0%",
-        "100", "251", "25", "13,660,450", "57", "89", "64",
+        "Death", "rune", "190", "195", "2", "1.1%",
+        "25,000", "1,333,338", "25,000", "50,000", "100", "100", "100",
     ]  # fmt: skip
-    assert "Showing 3 of 3 flips, ranked by profit." in output
+    assert "Showing 2 of 2 flips, ranked by profit." in output
     assert fake_client.closed
 
 
@@ -121,14 +120,14 @@ def test_top_option(fake_client: FakeClient, capsys: pytest.CaptureFixture[str])
 
     output = capsys.readouterr().out
     assert len(table_rows(output)) == 1
-    assert "Showing 1 of 3 flips" in output
+    assert "Showing 1 of 2 flips" in output
 
 
 @pytest.mark.parametrize(
     ("args", "expected"),
     [
-        (["--min-roi", "5"], ["Old school bond", "Feather"]),
-        (["--min-margin", "2"], ["Old school bond", "Death rune"]),
+        (["--min-roi", "5"], ["Feather"]),
+        (["--min-margin", "2"], ["Death rune"]),
         (["--max-price", "1000"], ["Death rune", "Feather"]),
         (["--min-volume", "1000000"], ["Death rune", "Feather"]),
     ],

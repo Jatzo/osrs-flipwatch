@@ -27,7 +27,7 @@ flipwatch scan --f2p --top 50
 
 The scan compares the latest instant buy and instant sell price for every item. The idea is to place a buy offer at the instant sell price and a sell offer at the instant buy price, so the margin is the gap between them minus the 2% Grand Exchange tax, which is capped at 5,000,000 coins per item and waived for a short list of exempt items.
 
-Items are skipped when either price is more than 10 minutes old, when the margin after tax is zero or less, or when fewer than 50 trades happened on the thinner side of the market in the last hour. Items with no listed buy limit are skipped too, unless you pass `--no-limit-policy volume`.
+Items are skipped when either price is more than 10 minutes old, when the margin after tax is zero or less, or when fewer than 50 trades happened on the thinner side of the market in the last hour. Items with no listed buy limit are skipped too, unless you pass `--no-limit-policy volume`. Old school bonds are always left out, because a bond bought on the Grand Exchange becomes untradeable and costs 10% of its value to make tradeable again.
 
 Quantity is the lower of the buy limit and 10% of last hour's volume on the thinner side. A buy offer fills against people selling instantly and a sell offer fills against people buying instantly, so the quieter side is what limits a flip. Potential profit is margin times quantity.
 

@@ -5,6 +5,7 @@ from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from enum import StrEnum
 
+from flipwatch.config import EXCLUDED_ITEM_IDS
 from flipwatch.models import Confidence, Item, LatestPrice, Opportunity, PriceWindow
 from flipwatch.tax import ge_tax
 
@@ -79,6 +80,8 @@ def evaluate(
     now: float,
 ) -> Opportunity | None:
     """Build an opportunity for one item, or return None if it fails a filter."""
+    if item.id in EXCLUDED_ITEM_IDS:
+        return None
     if settings.members is not None and item.members != settings.members:
         return None
     if not _is_fresh(price, settings.freshness_seconds, now):
