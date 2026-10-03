@@ -9,6 +9,66 @@ from dotenv import load_dotenv
 DEFAULT_API_BASE_URL = "https://prices.runescape.wiki/api/v1/osrs"
 DEFAULT_HTTP_TIMEOUT_SECONDS = 10.0
 
+# Grand Exchange tax, checked against the OSRS Wiki Grand Exchange page in October 2026.
+# The rate rose from 1% to 2% on 29 May 2025. A whole number percentage keeps the
+# rounding exact, since the game rounds the tax down to the nearest coin.
+GE_TAX_RATE_PERCENT = 2
+GE_TAX_CAP = 5_000_000
+
+GE_TAX_EXEMPT_ITEM_IDS: frozenset[int] = frozenset(
+    {
+        13190,  # Old school bond
+        # The wiki lists "Energy potion" without a dose, so every dose is treated as exempt.
+        3008,  # Energy potion(4)
+        3010,  # Energy potion(3)
+        3012,  # Energy potion(2)
+        3014,  # Energy potion(1)
+        882,  # Bronze arrow
+        806,  # Bronze dart
+        884,  # Iron arrow
+        807,  # Iron dart
+        558,  # Mind rune
+        886,  # Steel arrow
+        808,  # Steel dart
+        365,  # Bass
+        2309,  # Bread
+        1891,  # Cake
+        2140,  # Cooked chicken
+        2142,  # Cooked meat
+        347,  # Herring
+        379,  # Lobster
+        355,  # Mackerel
+        2327,  # Meat pie
+        351,  # Pike
+        329,  # Salmon
+        315,  # Shrimps
+        361,  # Tuna
+        8011,  # Ardougne teleport (tablet)
+        8010,  # Camelot teleport (tablet)
+        28824,  # Civitas illa fortis teleport
+        8009,  # Falador teleport (tablet)
+        3853,  # Games necklace(8)
+        28790,  # Kourend castle teleport (tablet)
+        8008,  # Lumbridge teleport (tablet)
+        2552,  # Ring of dueling(8)
+        8013,  # Teleport to house (tablet)
+        8007,  # Varrock teleport (tablet)
+        1755,  # Chisel
+        5325,  # Gardening trowel
+        1785,  # Glassblowing pipe
+        2347,  # Hammer
+        1733,  # Needle
+        233,  # Pestle and mortar
+        5341,  # Rake
+        8794,  # Saw
+        5329,  # Secateurs
+        5343,  # Seed dibber
+        1735,  # Shears
+        952,  # Spade
+        5331,  # Watering can
+    }
+)
+
 
 class ConfigError(Exception):
     """Raised when a required setting is missing or a value is invalid."""
