@@ -17,6 +17,11 @@ DEFAULT_RETENTION_DAYS = 90
 GE_TAX_RATE_PERCENT = 2
 GE_TAX_CAP = 5_000_000
 
+# A buy limit applies to a rolling four hour window that starts with the first purchase.
+BUY_LIMIT_WINDOW_SECONDS = 4 * 60 * 60
+# Members get eight Grand Exchange offer slots, free to play accounts get three.
+GE_OFFER_SLOTS = 8
+
 GE_TAX_EXEMPT_ITEM_IDS: frozenset[int] = frozenset(
     {
         13190,  # Old school bond
