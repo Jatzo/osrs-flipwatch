@@ -1,3 +1,4 @@
+import threading
 from collections.abc import Iterator
 from typing import Any
 
@@ -5,7 +6,13 @@ import httpx
 import pytest
 import respx
 
-from flipwatch.api import LATEST_TTL_SECONDS, MAPPING_TTL_SECONDS, ApiError, PricesClient
+from flipwatch.api import (
+    LATEST_TTL_SECONDS,
+    MAPPING_TTL_SECONDS,
+    ApiError,
+    PricesClient,
+    _TtlCache,
+)
 from flipwatch.config import ConfigError, Settings
 
 BASE_URL = "https://prices.example.test/api/v1/osrs"
@@ -237,3 +244,39 @@ def test_failed_request_is_not_cached(
     with pytest.raises(ApiError):
         client.latest()
     assert client.latest()[4151].high == 818095
+
+
+def test_cache_expiry_is_safe_across_threads() -> None:
+    # Forces the interleaving that breaks a cache without a lock: the first thread pauses
+    # after reading an expired entry, and the second removes it in the meantime.
+    first_paused = threading.Event()
+    second_finished = threading.Event()
+
+    def clock() -> float:
+        if threading.current_thread().name == "first":
+            first_paused.set()
+            second_finished.wait(timeout=0.2)
+        return 1_000.0
+
+    cache = _TtlCache(clock)
+    cache._entries["latest"] = (1_000.0, "stale")
+    errors: list[BaseException] = []
+
+    def first() -> None:
+        try:
+            cache.get("latest")
+        except BaseException as exc:
+            errors.append(exc)
+
+    def second() -> None:
+        first_paused.wait(timeout=1)
+        cache.get("latest")
+        second_finished.set()
+
+    threads = [threading.Thread(target=first, name="first"), threading.Thread(target=second)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    assert errors == []

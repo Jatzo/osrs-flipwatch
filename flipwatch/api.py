@@ -4,6 +4,7 @@ The wiki asks clients to identify themselves and to avoid needless requests, so 
 client refuses to run without a user agent and caches the endpoints that change slowly.
 """
 
+import threading
 import time
 from collections.abc import Callable, Mapping
 from typing import Any, Self
@@ -26,22 +27,27 @@ class ApiError(Exception):
 
 
 class _TtlCache:
+    # The dashboard shares one client between request threads, so every read and
+    # write holds the lock.
     def __init__(self, clock: Clock) -> None:
         self._clock = clock
         self._entries: dict[str, tuple[float, Any]] = {}
+        self._lock = threading.Lock()
 
     def get(self, key: str) -> Any | None:
-        entry = self._entries.get(key)
-        if entry is None:
-            return None
-        expires_at, value = entry
-        if self._clock() >= expires_at:
-            del self._entries[key]
-            return None
-        return value
+        with self._lock:
+            entry = self._entries.get(key)
+            if entry is None:
+                return None
+            expires_at, value = entry
+            if self._clock() >= expires_at:
+                del self._entries[key]
+                return None
+            return value
 
     def put(self, key: str, value: Any, ttl_seconds: float) -> None:
-        self._entries[key] = (self._clock() + ttl_seconds, value)
+        with self._lock:
+            self._entries[key] = (self._clock() + ttl_seconds, value)
 
 
 class PricesClient:
