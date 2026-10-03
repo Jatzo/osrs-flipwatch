@@ -4,6 +4,8 @@ from typing import Any
 
 import pytest
 
+from tests.fakes import FakeClient
+
 FIXTURES = Path(__file__).parent / "fixtures"
 
 
@@ -34,3 +36,16 @@ def one_hour_payload() -> dict[str, Any]:
 @pytest.fixture
 def timeseries_payload() -> dict[str, Any]:
     return read_fixture("timeseries_5m_4151.json")
+
+
+@pytest.fixture
+def fake_client(
+    mapping_payload: list[dict[str, Any]],
+    latest_payload: dict[str, Any],
+    one_hour_payload: dict[str, Any],
+    five_minute_payload: dict[str, Any],
+    timeseries_payload: dict[str, Any],
+) -> FakeClient:
+    return FakeClient(
+        mapping_payload, latest_payload, one_hour_payload, five_minute_payload, timeseries_payload
+    )

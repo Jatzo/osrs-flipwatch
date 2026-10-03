@@ -1,76 +1,20 @@
 import sqlite3
 from pathlib import Path
-from typing import Any, Self
 
 import pytest
 
 from flipwatch.api import ApiError
 from flipwatch.cli import main, parse_coins
 from flipwatch.config import Settings
-from flipwatch.models import Item, LatestPrice, PriceWindow
+from flipwatch.models import Item, PriceWindow
 from flipwatch.store import SCHEMA_VERSION, Store
+from tests.fakes import FakeClient
 
 NOW = 1_791_066_600
 SYNAPSE = "Tormented synapse"
 HALBERD = "Noxious halberd"
 # Turns off the default margin and profit floors so the cheap fixture items show up.
 NO_FLOORS = ["--min-margin", "0", "--min-profit", "0"]
-
-
-class FakeClient:
-    """Serves the fixture payloads in place of the real API."""
-
-    def __init__(
-        self,
-        mapping: list[dict[str, Any]],
-        latest: dict[str, Any],
-        hourly: dict[str, Any],
-        five_minute: dict[str, Any] | None = None,
-        timeseries: dict[str, Any] | None = None,
-        error: ApiError | None = None,
-    ) -> None:
-        self._mapping = mapping
-        self._latest = latest
-        self._hourly = hourly
-        self._five_minute = five_minute or {"data": {}}
-        self._timeseries = timeseries or {"data": []}
-        self._error = error
-        self.closed = False
-
-    def __enter__(self) -> Self:
-        return self
-
-    def __exit__(self, *exc_info: object) -> None:
-        self.closed = True
-
-    def mapping(self) -> dict[int, Item]:
-        if self._error:
-            raise self._error
-        return {r["id"]: Item.from_api(r) for r in self._mapping}
-
-    def latest(self) -> dict[int, LatestPrice]:
-        return {int(k): LatestPrice.from_api(int(k), v) for k, v in self._latest["data"].items()}
-
-    def one_hour(self) -> dict[int, PriceWindow]:
-        timestamp = self._hourly["timestamp"]
-        return {
-            int(k): PriceWindow.from_api(int(k), timestamp, v)
-            for k, v in self._hourly["data"].items()
-        }
-
-    def five_minute(self, timestamp: int | None = None) -> dict[int, PriceWindow]:
-        # Every window gets the same fixture data, stamped with the requested time.
-        assert timestamp is not None
-        return {
-            int(k): PriceWindow.from_api(int(k), timestamp, v)
-            for k, v in self._five_minute["data"].items()
-        }
-
-    def timeseries(self, item_id: int, timestep: str = "5m") -> list[PriceWindow]:
-        return [
-            PriceWindow.from_api(item_id, point["timestamp"], point)
-            for point in self._timeseries["data"]
-        ]
 
 
 @pytest.fixture
@@ -83,19 +27,6 @@ def environment(monkeypatch: pytest.MonkeyPatch, db_path: Path) -> None:
     monkeypatch.setattr("flipwatch.config.load_dotenv", lambda: None)
     monkeypatch.setenv("FLIPWATCH_USER_AGENT", "osrs-flipwatch-tests (example.test)")
     monkeypatch.setenv("FLIPWATCH_DB_PATH", str(db_path))
-
-
-@pytest.fixture
-def fake_client(
-    mapping_payload: list[dict[str, Any]],
-    latest_payload: dict[str, Any],
-    one_hour_payload: dict[str, Any],
-    five_minute_payload: dict[str, Any],
-    timeseries_payload: dict[str, Any],
-) -> FakeClient:
-    return FakeClient(
-        mapping_payload, latest_payload, one_hour_payload, five_minute_payload, timeseries_payload
-    )
 
 
 def run_command(client: FakeClient, *argv: str, now: float = NOW) -> int:
