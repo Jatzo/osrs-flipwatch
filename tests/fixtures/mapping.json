@@ -65,6 +65,17 @@
     "name": "Feather"
   },
   {
+    "examine": "A venomous halberd created from the parts of an araxyte.",
+    "id": 29796,
+    "members": true,
+    "lowalch": 200000,
+    "limit": 8,
+    "value": 500000,
+    "highalch": 300000,
+    "icon": "Noxious halberd.png",
+    "name": "Noxious halberd"
+  },
+  {
     "members": false,
     "name": "Old school bond",
     "examine": "This bond can be redeemed for membership.",
@@ -72,5 +83,16 @@
     "value": 2000000,
     "icon": "Old school bond.png",
     "limit": 100
+  },
+  {
+    "examine": "Glowing hot and writhing in pain.",
+    "id": 29580,
+    "members": true,
+    "lowalch": 320000,
+    "limit": 5,
+    "value": 800000,
+    "highalch": 480000,
+    "icon": "Tormented synapse.png",
+    "name": "Tormented synapse"
   }
 ]

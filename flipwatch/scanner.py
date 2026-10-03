@@ -31,8 +31,11 @@ class ScanSettings:
     # Share of the thinner side's hourly volume a single flipper can expect to fill.
     volume_share: float = 0.10
     min_volume: int = 50
-    min_margin: int = 0
+    # A margin of a few coins disappears as soon as someone undercuts by one coin.
+    min_margin: int = 10
     min_roi: float = 0.0
+    # Potential profit below this is not worth tying up an offer slot for four hours.
+    min_profit: int = 500_000
     max_buy_price: int | None = None
     members: bool | None = None
     no_limit_policy: NoLimitPolicy = NoLimitPolicy.SKIP
@@ -104,7 +107,7 @@ def evaluate(
         return None
 
     quantity = realistic_quantity(item.buy_limit, tradeable_volume, settings)
-    if not quantity:
+    if not quantity or margin * quantity < settings.min_profit:
         return None
 
     return Opportunity(

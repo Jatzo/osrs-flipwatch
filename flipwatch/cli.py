@@ -65,7 +65,14 @@ def build_parser() -> argparse.ArgumentParser:
         "--min-margin",
         type=_non_negative_int,
         default=defaults.min_margin,
-        help="minimum margin per item after tax, in coins",
+        help=f"minimum margin per item after tax, in coins (default {defaults.min_margin})",
+    )
+    scan_parser.add_argument(
+        "--min-profit",
+        type=_non_negative_int,
+        default=defaults.min_profit,
+        help="minimum potential profit per buy limit window, in coins "
+        f"(default {defaults.min_profit:,})",
     )
     scan_parser.add_argument(
         "--min-roi",
@@ -102,6 +109,7 @@ def run_scan(args: argparse.Namespace, client: PricesClient, now: float) -> int:
     settings = ScanSettings(
         min_volume=args.min_volume,
         min_margin=args.min_margin,
+        min_profit=args.min_profit,
         min_roi=args.min_roi / 100,
         max_buy_price=args.max_price,
         members=args.members,

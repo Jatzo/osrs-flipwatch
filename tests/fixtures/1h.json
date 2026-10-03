@@ -29,6 +29,18 @@
       "highPriceVolume": 762,
       "avgLowPrice": 11250231,
       "lowPriceVolume": 251
+    },
+    "29580": {
+      "avgHighPrice": 43545740,
+      "highPriceVolume": 95,
+      "avgLowPrice": 42805564,
+      "lowPriceVolume": 85
+    },
+    "29796": {
+      "avgHighPrice": 38167470,
+      "highPriceVolume": 56,
+      "avgLowPrice": 37403408,
+      "lowPriceVolume": 54
     }
   },
   "timestamp": 1791057600

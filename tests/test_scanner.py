@@ -14,10 +14,14 @@ from flipwatch.scanner import (
     realistic_quantity,
     scan,
 )
+from flipwatch.tax import ge_tax
 
 NOW = 1_791_066_600
 FRESH = NOW - 60
 DEFAULTS = ScanSettings()
+# The default margin and profit floors get their own tests. Everywhere else they are
+# switched off so the examples can use small, easy to check numbers.
+SETTINGS = replace(DEFAULTS, min_margin=0, min_profit=0)
 
 
 def make_item(item_id: int = 1, buy_limit: int | None = 1_000, members: bool = True) -> Item:
@@ -64,7 +68,7 @@ def evaluate_one(
     item: Item | None = None,
     price: LatestPrice | None = None,
     window: PriceWindow | None = None,
-    settings: ScanSettings = DEFAULTS,
+    settings: ScanSettings = SETTINGS,
 ):
     return evaluate(
         item or make_item(), price or make_price(), window or make_window(), settings, NOW
@@ -143,29 +147,46 @@ class TestFilters:
         assert evaluate_one(window=window) is None
 
     def test_min_margin(self) -> None:
-        assert evaluate_one(settings=ScanSettings(min_margin=78)) is not None
-        assert evaluate_one(settings=ScanSettings(min_margin=79)) is None
+        assert evaluate_one(settings=replace(SETTINGS, min_margin=78)) is not None
+        assert evaluate_one(settings=replace(SETTINGS, min_margin=79)) is None
 
     def test_min_roi(self) -> None:
-        assert evaluate_one(settings=ScanSettings(min_roi=0.078)) is not None
-        assert evaluate_one(settings=ScanSettings(min_roi=0.079)) is None
+        assert evaluate_one(settings=replace(SETTINGS, min_roi=0.078)) is not None
+        assert evaluate_one(settings=replace(SETTINGS, min_roi=0.079)) is None
+
+    def test_min_profit(self) -> None:
+        assert evaluate_one(settings=replace(SETTINGS, min_profit=39_000)) is not None
+        assert evaluate_one(settings=replace(SETTINGS, min_profit=39_001)) is None
+
+    def test_default_margin_floor_is_10_coins(self) -> None:
+        settings = replace(DEFAULTS, min_profit=0)
+
+        assert evaluate_one(price=make_price(high=1_030), settings=settings) is not None
+        assert evaluate_one(price=make_price(high=1_029), settings=settings) is None
+
+    def test_default_profit_floor_is_500k(self) -> None:
+        big_seller = make_item(buy_limit=10_000)
+        busy_window = make_window(high_volume=100_000, low_volume=100_000)
+
+        assert evaluate_one(settings=DEFAULTS) is None
+        assert evaluate_one(big_seller, window=busy_window, settings=DEFAULTS) is not None
 
     def test_max_buy_price(self) -> None:
-        assert evaluate_one(settings=ScanSettings(max_buy_price=1_000)) is not None
-        assert evaluate_one(settings=ScanSettings(max_buy_price=999)) is None
+        assert evaluate_one(settings=replace(SETTINGS, max_buy_price=1_000)) is not None
+        assert evaluate_one(settings=replace(SETTINGS, max_buy_price=999)) is None
 
     @pytest.mark.parametrize(
         ("members_filter", "kept"), [(None, True), (True, True), (False, False)]
     )
     def test_members_filter(self, members_filter: bool | None, kept: bool) -> None:
         result = evaluate_one(
-            make_item(members=True), settings=ScanSettings(members=members_filter)
+            make_item(members=True), settings=replace(SETTINGS, members=members_filter)
         )
 
         assert (result is not None) is kept
 
     def test_quantity_that_rounds_to_zero_is_skipped(self) -> None:
-        settings = ScanSettings(min_volume=0)
+        settings = replace(SETTINGS, min_volume=0)
         window = make_window(high_volume=9, low_volume=9)
 
         assert evaluate_one(window=window, settings=settings) is None
@@ -186,7 +207,7 @@ class TestQuantity:
         assert evaluate_one(make_item(buy_limit=None)) is None
 
     def test_no_limit_capped_by_volume_when_configured(self) -> None:
-        settings = ScanSettings(no_limit_policy=NoLimitPolicy.VOLUME)
+        settings = replace(SETTINGS, no_limit_policy=NoLimitPolicy.VOLUME)
 
         assert realistic_quantity(None, 5_000, settings) == 500
         opportunity = evaluate_one(make_item(buy_limit=None), settings=settings)
@@ -318,10 +339,20 @@ def test_scan_over_real_fixtures(
     ranked = rank(scan(items, latest, hourly, DEFAULTS, NOW))
 
     # The bond is excluded, the whip loses money after tax, the cannon base trades too
-    # thinly, the 3rd Age items are stale and have no hourly volume, and item 2660 is
-    # not in the mapping.
-    assert [o.item.name for o in ranked] == ["Death rune", "Feather"]
+    # thinly, the 3rd Age items are stale and have no hourly volume, item 2660 is not in
+    # the mapping, and the death rune and feather margins are too small to be worth it.
+    assert [o.item.name for o in ranked] == ["Tormented synapse", "Noxious halberd"]
 
-    death_rune, feather = ranked
+    synapse, halberd = ranked
+    assert (synapse.margin, synapse.quantity, synapse.potential_profit) == (1_222_531, 5, 6_112_655)
+    assert synapse.tax == ge_tax(synapse.sell_price)
+    assert (halberd.margin, halberd.quantity, halberd.potential_profit) == (158_046, 5, 790_230)
+    # The synapse has the bigger margin but trades thinly and has moved from its average.
+    assert synapse.confidence.score < halberd.confidence.score
+
+    without_floors = rank(scan(items, latest, hourly, SETTINGS, NOW))
+    names = [o.item.name for o in without_floors]
+    assert names == ["Tormented synapse", "Noxious halberd", "Death rune", "Feather"]
+    death_rune, feather = without_floors[2:]
     assert (death_rune.tax, death_rune.margin, death_rune.quantity) == (3, 2, 25_000)
     assert (feather.tax, feather.margin, feather.confidence.score) == (0, 1, 100)

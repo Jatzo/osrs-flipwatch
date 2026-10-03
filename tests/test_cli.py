@@ -8,6 +8,10 @@ from flipwatch.config import Settings
 from flipwatch.models import Item, LatestPrice, PriceWindow
 
 NOW = 1_791_066_600
+SYNAPSE = "Tormented synapse"
+HALBERD = "Noxious halberd"
+# Turns off the default margin and profit floors so the cheap fixture items show up.
+NO_FLOORS = ["--min-margin", "0", "--min-profit", "0"]
 
 
 class FakeClient:
@@ -71,6 +75,10 @@ def run(client: FakeClient, *args: str) -> int:
     return main(["scan", *args], client_factory=factory, clock=lambda: NOW)
 
 
+def item_names(rows: list[str]) -> list[str]:
+    return [row.split("  ")[0].strip() for row in rows]
+
+
 def table_rows(output: str) -> list[str]:
     lines = output.splitlines()
     return lines[2 : lines.index("")]
@@ -88,20 +96,17 @@ def test_scan_prints_ranked_table(
         "Item", "Buy", "Sell", "Margin", "ROI", "Limit",
         "Vol/h", "Qty", "Profit", "Conf", "Liq", "Stab",
     ]  # fmt: skip
-    assert [row.split("  ")[0].strip() for row in rows] == [
-        "Death rune",
-        "Feather",
-    ]
+    assert item_names(rows) == ["Tormented synapse", "Noxious halberd"]
     assert rows[0].split() == [
-        "Death", "rune", "190", "195", "2", "1.1%",
-        "25,000", "1,333,338", "25,000", "50,000", "100", "100", "100",
+        "Tormented", "synapse", "39,516,908", "41,570,856", "1,222,531", "3.1%",
+        "5", "85", "5", "6,112,655", "17", "72", "23",
     ]  # fmt: skip
     assert "Showing 2 of 2 flips, ranked by profit." in output
     assert fake_client.closed
 
 
 def test_columns_are_aligned(fake_client: FakeClient, capsys: pytest.CaptureFixture[str]) -> None:
-    run(fake_client)
+    run(fake_client, *NO_FLOORS)
 
     lines = capsys.readouterr().out.splitlines()
     table = lines[: lines.index("")]
@@ -109,10 +114,10 @@ def test_columns_are_aligned(fake_client: FakeClient, capsys: pytest.CaptureFixt
 
 
 def test_sort_option(fake_client: FakeClient, capsys: pytest.CaptureFixture[str]) -> None:
-    run(fake_client, "--sort", "roi")
+    run(fake_client, "--sort", "confidence")
 
     rows = table_rows(capsys.readouterr().out)
-    assert rows[0].startswith("Feather")
+    assert item_names(rows) == ["Noxious halberd", "Tormented synapse"]
 
 
 def test_top_option(fake_client: FakeClient, capsys: pytest.CaptureFixture[str]) -> None:
@@ -126,10 +131,14 @@ def test_top_option(fake_client: FakeClient, capsys: pytest.CaptureFixture[str])
 @pytest.mark.parametrize(
     ("args", "expected"),
     [
-        (["--min-roi", "5"], ["Feather"]),
-        (["--min-margin", "2"], ["Death rune"]),
-        (["--max-price", "1000"], ["Death rune", "Feather"]),
-        (["--min-volume", "1000000"], ["Death rune", "Feather"]),
+        ([*NO_FLOORS, "--min-roi", "5"], ["Feather"]),
+        (["--min-profit", "0", "--min-margin", "2"], [SYNAPSE, HALBERD, "Death rune"]),
+        (["--min-profit", "790230"], [SYNAPSE, HALBERD]),
+        (["--min-profit", "790231"], [SYNAPSE]),
+        ([*NO_FLOORS, "--max-price", "1000"], ["Death rune", "Feather"]),
+        ([*NO_FLOORS, "--min-volume", "1000000"], ["Death rune", "Feather"]),
+        ([*NO_FLOORS, "--f2p"], ["Death rune", "Feather"]),
+        ([*NO_FLOORS, "--members"], [SYNAPSE, HALBERD]),
     ],
 )
 def test_filter_options(
@@ -140,13 +149,12 @@ def test_filter_options(
 ) -> None:
     run(fake_client, *args)
 
-    rows = table_rows(capsys.readouterr().out)
-    assert [row.split("  ")[0].strip() for row in rows] == expected
+    assert item_names(table_rows(capsys.readouterr().out)) == expected
 
 
 def test_no_matches(fake_client: FakeClient, capsys: pytest.CaptureFixture[str]) -> None:
-    # Every item that survives the other filters in the fixtures is free to play.
-    assert run(fake_client, "--members") == 0
+    # The free to play items in the fixtures all have margins below the default floors.
+    assert run(fake_client, "--f2p") == 0
 
     assert capsys.readouterr().out.strip() == "No flips match the current filters."
 
