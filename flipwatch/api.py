@@ -16,6 +16,8 @@ from flipwatch.models import Item, LatestPrice, PriceWindow
 
 MAPPING_TTL_SECONDS = 24 * 60 * 60
 LATEST_TTL_SECONDS = 60
+# The dashboard can ask for the same item's history on every page view.
+TIMESERIES_TTL_SECONDS = 5 * 60
 
 TIMESTEP_SECONDS = {"5m": 5 * 60, "1h": 60 * 60, "6h": 6 * 60 * 60, "24h": 24 * 60 * 60}
 
@@ -115,16 +117,22 @@ class PricesClient:
         return self._window("/1h", "1h", timestamp)
 
     def timeseries(self, item_id: int, timestep: str = "5m") -> list[PriceWindow]:
-        """Return up to 365 recent windows for one item, oldest first."""
+        """Return up to 365 recent windows for one item, oldest first. Cached for 5 minutes."""
         check_timestep(timestep)
+        key = f"timeseries:{item_id}:{timestep}"
+        cached = self._cache.get(key)
+        if cached is not None:
+            return list(cached)
         payload = self._get_json("/timeseries", {"id": item_id, "timestep": timestep})
-        return _parse(
+        points = _parse(
             lambda: [
                 PriceWindow.from_api(item_id, point["timestamp"], point)
                 for point in payload["data"]
             ],
             "/timeseries",
         )
+        self._cache.put(key, tuple(points), TIMESERIES_TTL_SECONDS)
+        return points
 
     def _window(self, path: str, timestep: str, timestamp: int | None) -> Mapping[int, PriceWindow]:
         params: dict[str, int] = {}

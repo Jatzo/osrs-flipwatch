@@ -9,6 +9,7 @@ import respx
 from flipwatch.api import (
     LATEST_TTL_SECONDS,
     MAPPING_TTL_SECONDS,
+    TIMESERIES_TTL_SECONDS,
     ApiError,
     PricesClient,
     _TtlCache,
@@ -186,6 +187,37 @@ def test_timeseries(
     assert route.calls.last.request.url.params["timestep"] == "5m"
     assert len(points) == 12
     assert points == sorted(points, key=lambda p: p.timestamp)
+
+
+def test_timeseries_is_cached_per_item_and_timestep(
+    client: PricesClient,
+    api: respx.MockRouter,
+    clock: FakeClock,
+    timeseries_payload: dict[str, Any],
+) -> None:
+    route = api.get("/timeseries").respond(json=timeseries_payload)
+
+    client.timeseries(4151, "5m")
+    client.timeseries(4151, "5m")
+    assert route.call_count == 1
+
+    client.timeseries(4151, "1h")
+    client.timeseries(560, "5m")
+    assert route.call_count == 3
+
+    clock.advance(TIMESERIES_TTL_SECONDS)
+    client.timeseries(4151, "5m")
+    assert route.call_count == 4
+
+
+def test_cached_timeseries_cannot_be_changed_by_the_caller(
+    client: PricesClient, api: respx.MockRouter, timeseries_payload: dict[str, Any]
+) -> None:
+    api.get("/timeseries").respond(json=timeseries_payload)
+
+    client.timeseries(4151).clear()
+
+    assert len(client.timeseries(4151)) == 12
 
 
 def test_timeseries_rejects_unknown_timestep(client: PricesClient, api: respx.MockRouter) -> None:
