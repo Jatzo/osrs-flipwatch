@@ -58,7 +58,7 @@ def test_new_database_gets_the_schema(store: Store, db_path: Path) -> None:
         (journal_mode,) = conn.execute("PRAGMA journal_mode").fetchone()
 
     assert version == SCHEMA_VERSION
-    assert {"items", "price_windows", "collected_windows", "backtest_runs"} <= tables
+    assert {"items", "price_windows", "collected_windows", "backtest_runs", "watchlist"} <= tables
     assert journal_mode == "wal"
 
 
@@ -193,7 +193,7 @@ def test_version_1_database_is_upgraded_in_place(db_path: Path) -> None:
 
     with sqlite3.connect(db_path) as conn:
         (version,) = conn.execute("PRAGMA user_version").fetchone()
-    assert version == SCHEMA_VERSION == 2
+    assert version == SCHEMA_VERSION == 3
 
 
 def test_windows_between(store: Store) -> None:
@@ -267,3 +267,16 @@ def test_backtest_runs_round_trip(store: Store) -> None:
     )
     assert second != first
     assert store.backtest_run(999) is None
+
+
+def test_watchlist(store: Store) -> None:
+    assert store.watchlist() == []
+
+    assert store.watch(4151, added_at=T0 + 10)
+    assert store.watch(560, added_at=T0 + 20)
+    assert not store.watch(4151, added_at=T0 + 30)
+    assert store.watchlist() == [4151, 560]
+
+    assert store.unwatch(4151)
+    assert not store.unwatch(4151)
+    assert store.watchlist() == [560]

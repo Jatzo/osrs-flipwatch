@@ -62,7 +62,14 @@ CREATE TABLE backtest_runs (
 
 # Each entry upgrades the schema by one version. Never edit one that has shipped:
 # add a new entry instead, so existing databases upgrade in place.
-_MIGRATIONS = [_SCHEMA_V1, _SCHEMA_V2]
+_SCHEMA_V3 = """
+CREATE TABLE watchlist (
+    item_id INTEGER PRIMARY KEY,
+    added_at INTEGER NOT NULL
+);
+"""
+
+_MIGRATIONS = [_SCHEMA_V1, _SCHEMA_V2, _SCHEMA_V3]
 SCHEMA_VERSION = len(_MIGRATIONS)
 
 
@@ -316,6 +323,26 @@ class Store:
             "SELECT result FROM backtest_runs WHERE id = ?", (run_id,)
         ).fetchone()
         return None if row is None else result_from_dict(json.loads(row[0]))
+
+    def watchlist(self) -> list[int]:
+        """Return watched item ids in the order they were added."""
+        cursor = self._conn.execute("SELECT item_id FROM watchlist ORDER BY added_at, item_id")
+        return [row[0] for row in cursor]
+
+    def watch(self, item_id: int, added_at: int) -> bool:
+        """Add an item to the watchlist. Returns False if it was already there."""
+        with self._conn:
+            cursor = self._conn.execute(
+                "INSERT INTO watchlist (item_id, added_at) VALUES (?, ?) ON CONFLICT DO NOTHING",
+                (item_id, added_at),
+            )
+        return cursor.rowcount == 1
+
+    def unwatch(self, item_id: int) -> bool:
+        """Remove an item from the watchlist. Returns False if it was not there."""
+        with self._conn:
+            cursor = self._conn.execute("DELETE FROM watchlist WHERE item_id = ?", (item_id,))
+        return cursor.rowcount == 1
 
     def summary(self, timestep: str) -> StoreSummary:
         check_timestep(timestep)
