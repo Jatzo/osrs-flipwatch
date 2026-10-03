@@ -35,6 +35,29 @@ Large margins on tiny volume are often traps, so each flip has a confidence scor
 
 Run `flipwatch scan --help` for every option.
 
+## Collecting price history
+
+Backtests need history, so the collector stores the five minute averages for every traded item in a local SQLite database.
+
+```
+flipwatch collect
+flipwatch collect --once
+flipwatch seed 4151 11802 --timestep 1h
+flipwatch status
+```
+
+`flipwatch collect` runs until you stop it with Ctrl+C. It wakes 30 seconds after each five minute boundary, stores the window that has just closed and checks the last hour for gaps, fetching any window it missed. Use `--once` to run a single pass from cron or Task Scheduler instead. A window that the API has not published yet is left for the next run rather than stored as empty, so `flipwatch status` can report real gaps.
+
+`flipwatch seed` fills in recent history for a few items from the timeseries endpoint, up to 365 windows each. It is limited to 10 items per call to keep requests to the wiki light.
+
+Storing the whole market takes roughly 30 MB a day, so about 3 GB at the default retention of 90 days. Older data is deleted on each run. Change this with `FLIPWATCH_RETENTION_DAYS`, or set it to 0 to keep everything.
+
+## Configuration
+
+Settings come from environment variables or a `.env` file. See `.env.example` for the full list.
+
+`FLIPWATCH_USER_AGENT` is required and should name the project and give a contact. `FLIPWATCH_DB_PATH` sets where the database lives (default `flipwatch.sqlite3`) and `FLIPWATCH_RETENTION_DAYS` sets how long price data is kept (default 90).
+
 ## Data source
 
 Price data comes from the [OSRS Wiki real-time prices API](https://prices.runescape.wiki/).
