@@ -1,0 +1,76 @@
+[
+  {
+    "highalch": 33000,
+    "members": true,
+    "name": "3rd Age felling axe",
+    "examine": "A beautifully crafted axe, shaped by ancient smiths.",
+    "id": 28226,
+    "value": 55000,
+    "icon": "3rd Age felling axe.png",
+    "lowalch": 22000
+  },
+  {
+    "examine": "A beautifully crafted pickaxe, shaped by ancient smiths.",
+    "id": 20014,
+    "members": true,
+    "lowalch": 39180,
+    "limit": 40,
+    "value": 97950,
+    "highalch": 58770,
+    "icon": "3rd Age pickaxe.png",
+    "name": "3rd Age pickaxe"
+  },
+  {
+    "examine": "A weapon from the Abyss.",
+    "id": 4151,
+    "members": true,
+    "lowalch": 48000,
+    "limit": 70,
+    "value": 120001,
+    "highalch": 72000,
+    "icon": "Abyssal whip.png",
+    "name": "Abyssal whip"
+  },
+  {
+    "examine": "The cannon is built on this.",
+    "id": 6,
+    "members": true,
+    "lowalch": 75000,
+    "limit": 70,
+    "value": 187500,
+    "highalch": 112500,
+    "icon": "Cannon base.png",
+    "name": "Cannon base"
+  },
+  {
+    "examine": "Used for medium level missile spells.",
+    "id": 560,
+    "members": false,
+    "lowalch": 72,
+    "limit": 25000,
+    "value": 180,
+    "highalch": 108,
+    "icon": "Death rune.png",
+    "name": "Death rune"
+  },
+  {
+    "examine": "Used for fly fishing.",
+    "id": 314,
+    "members": false,
+    "lowalch": 1,
+    "limit": 30000,
+    "value": 2,
+    "highalch": 1,
+    "icon": "Feather.png",
+    "name": "Feather"
+  },
+  {
+    "members": false,
+    "name": "Old school bond",
+    "examine": "This bond can be redeemed for membership.",
+    "id": 13190,
+    "value": 2000000,
+    "icon": "Old school bond.png",
+    "limit": 100
+  }
+]

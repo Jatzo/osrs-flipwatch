@@ -1,0 +1,35 @@
+{
+  "data": {
+    "6": {
+      "avgHighPrice": 201556,
+      "highPriceVolume": 6,
+      "avgLowPrice": 190328,
+      "lowPriceVolume": 16
+    },
+    "314": {
+      "avgHighPrice": 3,
+      "highPriceVolume": 5591373,
+      "avgLowPrice": 2,
+      "lowPriceVolume": 1454540
+    },
+    "560": {
+      "avgHighPrice": 194,
+      "highPriceVolume": 1428412,
+      "avgLowPrice": 190,
+      "lowPriceVolume": 1333338
+    },
+    "4151": {
+      "avgHighPrice": 823791,
+      "highPriceVolume": 139,
+      "avgLowPrice": 813295,
+      "lowPriceVolume": 178
+    },
+    "13190": {
+      "avgHighPrice": 11472117,
+      "highPriceVolume": 762,
+      "avgLowPrice": 11250231,
+      "lowPriceVolume": 251
+    }
+  },
+  "timestamp": 1791057600
+}
