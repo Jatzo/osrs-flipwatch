@@ -376,29 +376,30 @@ def format_backtest(result: BacktestResult, run_id: int, item_count: int) -> str
     first = collector.format_timestamp(result.start)
     last = collector.format_timestamp(result.end)
     summary = [
-        ("Realised profit", f"{result.realised_profit:,}"),
-        ("Profit per hour", f"{result.profit_per_hour:,.0f}"),
-        ("Fill rate", f"{result.fill_rate:.1%}"),
-        ("Peak capital used", f"{result.peak_capital_committed:,}"),
-        (
-            "Max drawdown",
-            f"{result.max_drawdown:,} ({result.max_drawdown_percent:.1%})",
-        ),
-        ("Offers placed", f"{result.offers_placed:,} ({result.offers_rejected:,} rejected)"),
+        ("Realised profit", f"{result.realised_profit:,}", ""),
+        ("Profit per hour", f"{result.profit_per_hour:,.0f}", ""),
+        ("Fill rate", f"{result.fill_rate:.1%}", ""),
+        ("Peak capital used", f"{result.peak_capital_committed:,}", ""),
+        ("Max drawdown", f"{result.max_drawdown:,}", f"{result.max_drawdown_percent:.1%} of peak"),
+        ("Offers placed", f"{result.offers_placed:,}", f"{result.offers_rejected:,} rejected"),
         (
             "Unsold stock",
-            f"{result.held_stock_cost:,} at cost, {result.held_stock_value:,} if sold now",
+            f"{result.held_stock_cost:,}",
+            f"at cost, {result.held_stock_value:,} if sold now",
         ),
     ]
-    label_width = max(len(label) for label, _ in summary)
-    value_width = max(len(value) for _, value in summary)
+    label_width = max(len(label) for label, _, _ in summary)
+    value_width = max(len(value) for _, value, _ in summary)
     lines = [
         f"Backtest {run_id}: {result.strategy} strategy, "
         f"{result.timestep_seconds // 60} minute windows",
         f"{first} to {last} ({hours:,.1f} hours), {item_count} items, "
         f"{result.settings.starting_capital:,} starting capital",
         "",
-        *(f"{label.ljust(label_width)}  {value.rjust(value_width)}" for label, value in summary),
+        *(
+            f"{label.ljust(label_width)}  {value.rjust(value_width)}  {note}".rstrip()
+            for label, value, note in summary
+        ),
     ]
     traded = [item for item in result.items if item.filled]
     if traded:
