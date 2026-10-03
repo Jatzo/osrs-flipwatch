@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 
 DEFAULT_API_BASE_URL = "https://prices.runescape.wiki/api/v1/osrs"
 DEFAULT_HTTP_TIMEOUT_SECONDS = 10.0
+DEFAULT_DB_PATH = "flipwatch.sqlite3"
 
 # Grand Exchange tax, checked against the OSRS Wiki Grand Exchange page in October 2026.
 # The rate rose from 1% to 2% on 29 May 2025. A whole number percentage keeps the
@@ -88,6 +89,7 @@ class Settings:
     user_agent: str
     api_base_url: str = DEFAULT_API_BASE_URL
     http_timeout_seconds: float = DEFAULT_HTTP_TIMEOUT_SECONDS
+    db_path: str = DEFAULT_DB_PATH
 
 
 def load_settings(env: Mapping[str, str] | None = None) -> Settings:
@@ -110,6 +112,7 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
         http_timeout_seconds=_positive_float(
             env, "FLIPWATCH_HTTP_TIMEOUT_SECONDS", DEFAULT_HTTP_TIMEOUT_SECONDS
         ),
+        db_path=env.get("FLIPWATCH_DB_PATH", "").strip() or DEFAULT_DB_PATH,
     )
 
 

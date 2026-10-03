@@ -110,7 +110,7 @@ class PricesClient:
 
     def timeseries(self, item_id: int, timestep: str = "5m") -> list[PriceWindow]:
         """Return up to 365 recent windows for one item, oldest first."""
-        _check_timestep(timestep)
+        check_timestep(timestep)
         payload = self._get_json("/timeseries", {"id": item_id, "timestep": timestep})
         return _parse(
             lambda: [
@@ -160,7 +160,7 @@ def _windows_from_payload(payload: Mapping[str, Any]) -> dict[int, PriceWindow]:
     }
 
 
-def _check_timestep(timestep: str) -> None:
+def check_timestep(timestep: str) -> None:
     if timestep not in TIMESTEP_SECONDS:
         allowed = ", ".join(TIMESTEP_SECONDS)
         raise ValueError(f"timestep must be one of {allowed}, got {timestep!r}")

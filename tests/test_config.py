@@ -2,6 +2,7 @@ import pytest
 
 from flipwatch.config import (
     DEFAULT_API_BASE_URL,
+    DEFAULT_DB_PATH,
     DEFAULT_HTTP_TIMEOUT_SECONDS,
     ConfigError,
     load_settings,
@@ -16,6 +17,7 @@ def test_loads_user_agent_and_defaults() -> None:
     assert settings.user_agent == USER_AGENT
     assert settings.api_base_url == DEFAULT_API_BASE_URL
     assert settings.http_timeout_seconds == DEFAULT_HTTP_TIMEOUT_SECONDS
+    assert settings.db_path == DEFAULT_DB_PATH
 
 
 @pytest.mark.parametrize("value", [None, "", "   "])
@@ -38,11 +40,13 @@ def test_overrides_are_read() -> None:
             "FLIPWATCH_USER_AGENT": USER_AGENT,
             "FLIPWATCH_API_BASE_URL": "http://localhost:8000/api/",
             "FLIPWATCH_HTTP_TIMEOUT_SECONDS": "2.5",
+            "FLIPWATCH_DB_PATH": "data/prices.sqlite3",
         }
     )
 
     assert settings.api_base_url == "http://localhost:8000/api"
     assert settings.http_timeout_seconds == 2.5
+    assert settings.db_path == "data/prices.sqlite3"
 
 
 @pytest.mark.parametrize("value", ["soon", "0", "-1"])
