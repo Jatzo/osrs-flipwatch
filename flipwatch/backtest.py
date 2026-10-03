@@ -168,6 +168,8 @@ class BacktestResult:
     offers_rejected: int
     items: list[ItemResult]
     equity_curve: list[tuple[int, int]]
+    # Every item the strategy could trade. Runs saved before this was recorded have none.
+    universe: list[int] = field(default_factory=list)
 
 
 @dataclass
@@ -429,6 +431,7 @@ def run_backtest(
         offers_rejected=portfolio.offers_rejected,
         items=_item_results(portfolio.ledgers, tradeable),
         equity_curve=equity_curve,
+        universe=sorted(tradeable),
     )
 
 

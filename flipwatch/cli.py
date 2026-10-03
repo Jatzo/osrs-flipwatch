@@ -12,20 +12,18 @@ from pathlib import Path
 
 from flipwatch import collector
 from flipwatch.api import TIMESTEP_SECONDS, ApiError, PricesClient
-from flipwatch.backtest import BacktestResult, BacktestSettings, Strategy, run_backtest
+from flipwatch.backtest import BacktestResult, BacktestSettings
 from flipwatch.config import ConfigError, Settings, load_settings
 from flipwatch.models import Opportunity
+from flipwatch.runner import STRATEGIES, BacktestRequest, BacktestRequestError, run_and_save
 from flipwatch.scanner import NoLimitPolicy, ScanSettings, SortKey, rank, scan
 from flipwatch.store import Store, StoreError
-from flipwatch.strategies import DipBuy, MarginFlip
 
 ClientFactory = Callable[[Settings], PricesClient]
 Clock = Callable[[], float]
 
 MAX_NAME_WIDTH = 30
-SECONDS_PER_DAY = 24 * 60 * 60
 
-STRATEGIES: dict[str, Callable[[], Strategy]] = {"margin": MarginFlip, "dip": DipBuy}
 
 log = logging.getLogger(__name__)
 
@@ -325,53 +323,31 @@ def run_backtest_command(args: argparse.Namespace, runtime: Runtime) -> int:
         print(f"No database at {db_path} yet. Run flipwatch collect to start one.")
         return 1
     try:
-        settings = BacktestSettings(
-            starting_capital=args.capital,
-            fill_share=args.fill_share / 100,
-            offer_lifetime_seconds=round(args.offer_hours * 3600),
+        request = BacktestRequest(
+            strategy=args.strategy,
+            timestep=args.timestep,
+            days=args.days,
+            start=args.start,
+            end=args.end,
+            item_ids=tuple(args.items or ()),
+            top=args.top,
+            settings=BacktestSettings(
+                starting_capital=args.capital,
+                fill_share=args.fill_share / 100,
+                offer_lifetime_seconds=round(args.offer_hours * 3600),
+            ),
         )
-    except ValueError as exc:
+        with Store.open(db_path) as store:
+            saved = run_and_save(store, request, runtime.clock())
+    except (BacktestRequestError, ValueError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
 
-    with Store.open(db_path) as store:
-        end = args.end or store.latest_window_end(args.timestep)
-        if end is None:
-            print(f"error: no {args.timestep} data stored yet", file=sys.stderr)
-            return 1
-        start = args.start or end - args.days * SECONDS_PER_DAY
-        if start >= end:
-            print("error: the start must be before the end", file=sys.stderr)
-            return 1
-
-        items = store.items()
-        item_ids = args.items or store.top_items_by_volume(args.timestep, start, end, args.top)
-        unusable = [i for i in item_ids if i not in items or items[i].buy_limit is None]
-        if unusable:
-            print(f"error: no stored item with a buy limit for ids {unusable}", file=sys.stderr)
-            return 1
-        windows = store.windows_between(args.timestep, start, end, item_ids)
-        if not windows:
-            print("error: no stored data for those items in that period", file=sys.stderr)
-            return 1
-
-        strategy = STRATEGIES[args.strategy]()
-        result = run_backtest(
-            strategy,
-            windows,
-            {i: items[i] for i in item_ids},
-            TIMESTEP_SECONDS[args.timestep],
-            start,
-            end,
-            settings,
-        )
-        run_id = store.save_backtest(result, created_at=int(runtime.clock()))
-
-    print(format_backtest(result, run_id, item_count=len(item_ids)))
+    print(format_backtest(saved.result, saved.run_id))
     return 0
 
 
-def format_backtest(result: BacktestResult, run_id: int, item_count: int) -> str:
+def format_backtest(result: BacktestResult, run_id: int) -> str:
     hours = (result.end - result.start) / 3600
     first = collector.format_timestamp(result.start)
     last = collector.format_timestamp(result.end)
@@ -393,7 +369,7 @@ def format_backtest(result: BacktestResult, run_id: int, item_count: int) -> str
     lines = [
         f"Backtest {run_id}: {result.strategy} strategy, "
         f"{result.timestep_seconds // 60} minute windows",
-        f"{first} to {last} ({hours:,.1f} hours), {item_count} items, "
+        f"{first} to {last} ({hours:,.1f} hours), {len(result.universe)} items, "
         f"{result.settings.starting_capital:,} starting capital",
         "",
         *(
