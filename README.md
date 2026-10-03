@@ -52,6 +52,37 @@ flipwatch status
 
 Storing the whole market takes roughly 30 MB a day, so about 3 GB at the default retention of 90 days. Older data is deleted on each run. Change this with `FLIPWATCH_RETENTION_DAYS`, or set it to 0 to keep everything.
 
+## Backtesting
+
+```
+flipwatch backtest
+flipwatch backtest --strategy dip --days 3 --capital 20m
+flipwatch backtest --items 4151 11802 --timestep 1h --start 2026-09-01
+```
+
+A backtest replays stored price history through a strategy and reports realised profit, profit per hour, fill rate, peak capital used, maximum drawdown and a breakdown per item. Each run is saved to the database. By default it trades the 50 items with the most volume in the period, starting with 50,000,000 coins.
+
+Two example strategies are included. `margin` buys at the last window's average low price and sells at its average high when the gap clears 10 coins and 1% after tax. `dip` buys when the average low falls 3% below its mean over the last 24 windows and sells at the mean average high. Writing your own means implementing one method that takes the market and your portfolio and returns the offers to place.
+
+A strategy only ever sees windows that have already closed. The data it is handed simply does not contain anything later, and a test rewrites all prices after a cutoff and fails if any decision before the cutoff changes.
+
+### Fill model assumptions
+
+The stored data holds average prices and volumes for each window, not individual trades, so fills have to be estimated. The model leans towards pessimism:
+
+- An offer can only fill in windows after the one it was placed in.
+- A buy fills only in a window whose average low price is at or below the offer price, and a sell only in a window whose average high is at or above it.
+- An offer can take at most 10% of the volume on the matching side of each window, shared between all offers on that item. Change this with `--fill-share`.
+- Fills happen at the offer price, never better.
+- Buy limits apply over a rolling four hours from the first purchase. Items without a listed limit are left out.
+- Coins for a buy are set aside when the offer is placed, sales pay the 2% tax, and only stock you hold can be sold. At most 8 offers can be open at once.
+- Unfilled offers are cancelled after 4 hours. Change this with `--offer-hours`.
+- Stock still held at the end is reported at its last average low price after tax and is not counted as profit.
+
+### Limitations
+
+A backtest is an estimate, not a promise. Averages hide the spread of prices inside a window, so a real offer may fill more or less than the model says. Other flippers compete for the same volume, prices react to your own trades on thin items, and the buy limits come from the wiki rather than the game itself. The model also has no idea about game updates or news that moved prices in the past. Use the results to compare strategies with each other, not to predict what you will earn.
+
 ## Configuration
 
 Settings come from environment variables or a `.env` file. See `.env.example` for the full list.
