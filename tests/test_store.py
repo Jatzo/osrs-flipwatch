@@ -1,11 +1,13 @@
 import sqlite3
 from collections.abc import Iterator
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
 
+from flipwatch.backtest import BacktestResult, BacktestSettings, ItemResult
 from flipwatch.models import Item, PriceWindow
-from flipwatch.store import SCHEMA_VERSION, Store, StoreError
+from flipwatch.store import _SCHEMA_V1, SCHEMA_VERSION, BacktestRunSummary, Store, StoreError
 
 T0 = 1_791_066_000
 
@@ -56,7 +58,7 @@ def test_new_database_gets_the_schema(store: Store, db_path: Path) -> None:
         (journal_mode,) = conn.execute("PRAGMA journal_mode").fetchone()
 
     assert version == SCHEMA_VERSION
-    assert {"items", "price_windows", "collected_windows"} <= tables
+    assert {"items", "price_windows", "collected_windows", "backtest_runs"} <= tables
     assert journal_mode == "wal"
 
 
@@ -177,3 +179,91 @@ def test_delete_before(store: Store) -> None:
 def test_unknown_timestep_is_rejected(store: Store) -> None:
     with pytest.raises(ValueError, match="timestep"):
         store.save_windows("10m", [])
+
+
+def test_version_1_database_is_upgraded_in_place(db_path: Path) -> None:
+    with sqlite3.connect(db_path) as conn:
+        conn.executescript(_SCHEMA_V1)
+        conn.execute("PRAGMA user_version = 1")
+        conn.execute("INSERT INTO items VALUES (4151, 'Abyssal whip', 1, 70, 1, 1, 1, '')")
+
+    with Store.open(db_path) as store:
+        assert store.items()[4151].name == "Abyssal whip"
+        assert store.backtest_runs() == []
+
+    with sqlite3.connect(db_path) as conn:
+        (version,) = conn.execute("PRAGMA user_version").fetchone()
+    assert version == SCHEMA_VERSION == 2
+
+
+def test_windows_between(store: Store) -> None:
+    for offset in (0, 300, 600):
+        store.save_snapshot("5m", T0 + offset, snapshot(T0 + offset, 4151, 560, 2), T0)
+
+    windows = store.windows_between("5m", T0 + 300, T0 + 900, [4151, 560])
+
+    assert [(w.timestamp, w.item_id) for w in windows] == [
+        (T0 + 300, 560),
+        (T0 + 300, 4151),
+        (T0 + 600, 560),
+        (T0 + 600, 4151),
+    ]
+    assert store.windows_between("5m", T0, T0 + 900, []) == []
+
+
+def test_top_items_by_volume_uses_thinner_side_and_needs_a_buy_limit(store: Store) -> None:
+    store.save_items(
+        [make_item(1), make_item(2), make_item(3), make_item(4, "No limit", buy_limit=None)]
+    )
+    windows = {
+        1: replace(make_window(1, T0), high_volume=10, low_volume=1_000),
+        2: replace(make_window(2, T0), high_volume=500, low_volume=500),
+        3: replace(make_window(3, T0), high_volume=100, low_volume=100),
+        4: replace(make_window(4, T0), high_volume=9_999, low_volume=9_999),
+    }
+    store.save_snapshot("5m", T0, windows, T0)
+
+    assert store.top_items_by_volume("5m", T0, T0 + 300, limit=2) == [2, 3]
+    assert store.top_items_by_volume("5m", T0 + 300, T0 + 600, limit=2) == []
+
+
+def test_latest_window_end(store: Store) -> None:
+    assert store.latest_window_end("1h") is None
+
+    store.save_windows("1h", [make_window(4151, T0), make_window(4151, T0 + 3_600)])
+
+    assert store.latest_window_end("1h") == T0 + 7_200
+
+
+def test_backtest_runs_round_trip(store: Store) -> None:
+    result = BacktestResult(
+        strategy="margin",
+        start=T0,
+        end=T0 + 3_600,
+        timestep_seconds=300,
+        settings=BacktestSettings(starting_capital=1_000_000),
+        realised_profit=1_234,
+        profit_per_hour=1_234.0,
+        fill_rate=0.5,
+        peak_capital_committed=10_000,
+        max_drawdown=100,
+        max_drawdown_percent=0.01,
+        final_cash=1_001_234,
+        held_stock_value=0,
+        held_stock_cost=0,
+        offers_placed=4,
+        offers_rejected=1,
+        items=[ItemResult(4151, "Abyssal whip", 10, 10, 8_000_000, 8_001_234, 1_234, 20, 20)],
+        equity_curve=[(T0 + 300, 1_000_000), (T0 + 600, 1_001_234)],
+    )
+
+    first = store.save_backtest(result, created_at=T0 + 4_000)
+    second = store.save_backtest(replace(result, strategy="dip"), created_at=T0 + 5_000)
+
+    assert store.backtest_run(first) == result
+    assert [run.strategy for run in store.backtest_runs()] == ["dip", "margin"]
+    assert store.backtest_runs()[1] == BacktestRunSummary(
+        first, T0 + 4_000, "margin", T0, T0 + 3_600, 1_234
+    )
+    assert second != first
+    assert store.backtest_run(999) is None

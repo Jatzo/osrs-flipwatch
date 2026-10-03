@@ -11,7 +11,7 @@ from collections import defaultdict
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import Protocol, overload
+from typing import Any, Protocol, overload
 
 from flipwatch.config import BUY_LIMIT_WINDOW_SECONDS, GE_OFFER_SLOTS
 from flipwatch.models import Item, PriceWindow
@@ -422,6 +422,15 @@ def run_backtest(
         items=_item_results(portfolio.ledgers, tradeable),
         equity_curve=equity_curve,
     )
+
+
+def result_from_dict(data: Mapping[str, Any]) -> BacktestResult:
+    """Rebuild a result saved with `dataclasses.asdict`."""
+    fields = dict(data)
+    fields["settings"] = BacktestSettings(**fields["settings"])
+    fields["items"] = [ItemResult(**item) for item in fields["items"]]
+    fields["equity_curve"] = [(t, equity) for t, equity in fields["equity_curve"]]
+    return BacktestResult(**fields)
 
 
 def max_drawdown(
