@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 DEFAULT_API_BASE_URL = "https://prices.runescape.wiki/api/v1/osrs"
 DEFAULT_HTTP_TIMEOUT_SECONDS = 10.0
 DEFAULT_DB_PATH = "flipwatch.sqlite3"
+DEFAULT_RETENTION_DAYS = 90
 
 # Grand Exchange tax, checked against the OSRS Wiki Grand Exchange page in October 2026.
 # The rate rose from 1% to 2% on 29 May 2025. A whole number percentage keeps the
@@ -90,6 +91,8 @@ class Settings:
     api_base_url: str = DEFAULT_API_BASE_URL
     http_timeout_seconds: float = DEFAULT_HTTP_TIMEOUT_SECONDS
     db_path: str = DEFAULT_DB_PATH
+    # Zero keeps stored price data forever.
+    retention_days: int = DEFAULT_RETENTION_DAYS
 
 
 def load_settings(env: Mapping[str, str] | None = None) -> Settings:
@@ -113,6 +116,7 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
             env, "FLIPWATCH_HTTP_TIMEOUT_SECONDS", DEFAULT_HTTP_TIMEOUT_SECONDS
         ),
         db_path=env.get("FLIPWATCH_DB_PATH", "").strip() or DEFAULT_DB_PATH,
+        retention_days=_non_negative_int(env, "FLIPWATCH_RETENTION_DAYS", DEFAULT_RETENTION_DAYS),
     )
 
 
@@ -126,4 +130,17 @@ def _positive_float(env: Mapping[str, str], name: str, default: float) -> float:
         raise ConfigError(f"{name} must be a number, got {raw!r}") from None
     if value <= 0:
         raise ConfigError(f"{name} must be greater than zero, got {raw!r}")
+    return value
+
+
+def _non_negative_int(env: Mapping[str, str], name: str, default: int) -> int:
+    raw = env.get(name)
+    if raw is None or not raw.strip():
+        return default
+    try:
+        value = int(raw)
+    except ValueError:
+        raise ConfigError(f"{name} must be a whole number, got {raw!r}") from None
+    if value < 0:
+        raise ConfigError(f"{name} cannot be negative, got {raw!r}")
     return value

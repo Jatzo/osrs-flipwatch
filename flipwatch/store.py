@@ -220,11 +220,18 @@ class Store:
 
     def delete_before(self, timestamp: int) -> int:
         """Remove every window that started before `timestamp`. Returns rows removed."""
+        removed = 0
         with self._conn:
-            removed = self._conn.execute(
-                "DELETE FROM price_windows WHERE timestamp < ?", (timestamp,)
-            ).rowcount
-            self._conn.execute("DELETE FROM collected_windows WHERE timestamp < ?", (timestamp,))
+            # Filtering on timestep as well lets SQLite use the primary key, so a regular
+            # prune only touches the rows it removes.
+            for timestep in TIMESTEP_SECONDS:
+                params = (timestep, timestamp)
+                removed += self._conn.execute(
+                    "DELETE FROM price_windows WHERE timestep = ? AND timestamp < ?", params
+                ).rowcount
+                self._conn.execute(
+                    "DELETE FROM collected_windows WHERE timestep = ? AND timestamp < ?", params
+                )
         return removed
 
     def _insert_windows(self, timestep: str, windows: Iterable[PriceWindow]) -> int:

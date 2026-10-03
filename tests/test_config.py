@@ -4,6 +4,7 @@ from flipwatch.config import (
     DEFAULT_API_BASE_URL,
     DEFAULT_DB_PATH,
     DEFAULT_HTTP_TIMEOUT_SECONDS,
+    DEFAULT_RETENTION_DAYS,
     ConfigError,
     load_settings,
 )
@@ -18,6 +19,7 @@ def test_loads_user_agent_and_defaults() -> None:
     assert settings.api_base_url == DEFAULT_API_BASE_URL
     assert settings.http_timeout_seconds == DEFAULT_HTTP_TIMEOUT_SECONDS
     assert settings.db_path == DEFAULT_DB_PATH
+    assert settings.retention_days == DEFAULT_RETENTION_DAYS
 
 
 @pytest.mark.parametrize("value", [None, "", "   "])
@@ -41,12 +43,14 @@ def test_overrides_are_read() -> None:
             "FLIPWATCH_API_BASE_URL": "http://localhost:8000/api/",
             "FLIPWATCH_HTTP_TIMEOUT_SECONDS": "2.5",
             "FLIPWATCH_DB_PATH": "data/prices.sqlite3",
+            "FLIPWATCH_RETENTION_DAYS": "0",
         }
     )
 
     assert settings.api_base_url == "http://localhost:8000/api"
     assert settings.http_timeout_seconds == 2.5
     assert settings.db_path == "data/prices.sqlite3"
+    assert settings.retention_days == 0
 
 
 @pytest.mark.parametrize("value", ["soon", "0", "-1"])
@@ -64,3 +68,11 @@ def test_reads_process_environment_when_no_mapping_given(
     monkeypatch.setattr("flipwatch.config.load_dotenv", lambda: None)
 
     assert load_settings().user_agent == USER_AGENT
+
+
+@pytest.mark.parametrize("value", ["forever", "1.5", "-1"])
+def test_invalid_retention_is_rejected(value: str) -> None:
+    env = {"FLIPWATCH_USER_AGENT": USER_AGENT, "FLIPWATCH_RETENTION_DAYS": value}
+
+    with pytest.raises(ConfigError, match="FLIPWATCH_RETENTION_DAYS"):
+        load_settings(env)
