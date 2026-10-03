@@ -2,7 +2,6 @@
 
 import argparse
 import logging
-import re
 import sys
 import time
 from collections.abc import Callable, Sequence
@@ -13,6 +12,7 @@ from pathlib import Path
 from flipwatch import collector
 from flipwatch.api import TIMESTEP_SECONDS, ApiError, PricesClient
 from flipwatch.backtest import BacktestResult, BacktestSettings
+from flipwatch.coins import parse_coins
 from flipwatch.config import ConfigError, Settings, load_settings
 from flipwatch.models import Opportunity
 from flipwatch.runner import STRATEGIES, BacktestRequest, BacktestRequestError, run_and_save
@@ -207,7 +207,7 @@ def _add_backtest_command(commands: argparse._SubParsersAction) -> None:
     )
     backtest_parser.add_argument(
         "--capital",
-        type=parse_coins,
+        type=_coins,
         default=defaults.starting_capital,
         help="starting coins, for example 50m or 1.5b (default 50m)",
     )
@@ -450,16 +450,11 @@ def _truncate(text: str, width: int) -> str:
     return text if len(text) <= width else text[: width - 3] + "..."
 
 
-def parse_coins(value: str) -> int:
-    """Read an amount such as 50000000, 50m, 250k or 1.5b."""
-    match = re.fullmatch(r"\s*([0-9]+(?:\.[0-9]+)?)\s*([kmb]?)\s*", value.lower().replace(",", ""))
-    if match is None:
-        raise argparse.ArgumentTypeError(f"not an amount of coins: {value}")
-    number, suffix = match.groups()
-    coins = round(float(number) * {"": 1, "k": 10**3, "m": 10**6, "b": 10**9}[suffix])
-    if coins <= 0:
-        raise argparse.ArgumentTypeError(f"must be greater than zero, got {value}")
-    return coins
+def _coins(value: str) -> int:
+    try:
+        return parse_coins(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(str(exc)) from None
 
 
 def _parse_date(value: str) -> int:

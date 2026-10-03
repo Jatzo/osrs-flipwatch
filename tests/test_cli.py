@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 from flipwatch.api import ApiError
-from flipwatch.cli import main, parse_coins
+from flipwatch.cli import main
 from flipwatch.config import Settings
 from flipwatch.models import Item, PriceWindow
 from flipwatch.store import SCHEMA_VERSION, Store
@@ -381,12 +381,3 @@ class TestBacktest:
             run_command(fake_client, "backtest", *args)
 
         assert exit_info.value.code == 2
-
-
-@pytest.mark.parametrize(
-    ("text", "coins"),
-    [("50000000", 50_000_000), ("50m", 50_000_000), ("1.5b", 1_500_000_000),
-     ("250K", 250_000), ("12,500", 12_500), (" 2m ", 2_000_000)],
-)  # fmt: skip
-def test_parse_coins(text: str, coins: int) -> None:
-    assert parse_coins(text) == coins
