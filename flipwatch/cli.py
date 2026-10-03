@@ -2,23 +2,30 @@
 
 import argparse
 import logging
+import re
 import sys
 import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 
 from flipwatch import collector
 from flipwatch.api import TIMESTEP_SECONDS, ApiError, PricesClient
+from flipwatch.backtest import BacktestResult, BacktestSettings, Strategy, run_backtest
 from flipwatch.config import ConfigError, Settings, load_settings
 from flipwatch.models import Opportunity
 from flipwatch.scanner import NoLimitPolicy, ScanSettings, SortKey, rank, scan
 from flipwatch.store import Store, StoreError
+from flipwatch.strategies import DipBuy, MarginFlip
 
 ClientFactory = Callable[[Settings], PricesClient]
 Clock = Callable[[], float]
 
 MAX_NAME_WIDTH = 30
+SECONDS_PER_DAY = 24 * 60 * 60
+
+STRATEGIES: dict[str, Callable[[], Strategy]] = {"margin": MarginFlip, "dip": DipBuy}
 
 log = logging.getLogger(__name__)
 
@@ -56,6 +63,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_collect_command(commands)
     _add_seed_command(commands)
     _add_status_command(commands)
+    _add_backtest_command(commands)
     return parser
 
 
@@ -167,6 +175,66 @@ def _add_status_command(commands: argparse._SubParsersAction) -> None:
     status_parser.set_defaults(run=run_status)
 
 
+def _add_backtest_command(commands: argparse._SubParsersAction) -> None:
+    defaults = BacktestSettings()
+    backtest_parser = commands.add_parser(
+        "backtest",
+        help="test a strategy against stored price history",
+        description="Replay stored price history through a strategy with a conservative "
+        "fill model. The result is an estimate, not a promise of future profit.",
+    )
+    backtest_parser.add_argument(
+        "--strategy", choices=list(STRATEGIES), default="margin", help="default margin"
+    )
+    period = backtest_parser.add_mutually_exclusive_group()
+    period.add_argument(
+        "--days",
+        type=_positive_int,
+        default=7,
+        help="test the most recent number of days of stored data (default 7)",
+    )
+    period.add_argument("--start", type=_parse_date, help="first day to test, YYYY-MM-DD in UTC")
+    backtest_parser.add_argument(
+        "--end", type=_parse_date, help="day to stop before, YYYY-MM-DD in UTC (default now)"
+    )
+    universe = backtest_parser.add_mutually_exclusive_group()
+    universe.add_argument(
+        "--items", nargs="+", type=_positive_int, metavar="ITEM_ID", help="items to trade"
+    )
+    universe.add_argument(
+        "--top",
+        type=_positive_int,
+        default=50,
+        help="trade the most traded items in the period (default 50)",
+    )
+    backtest_parser.add_argument(
+        "--capital",
+        type=parse_coins,
+        default=defaults.starting_capital,
+        help="starting coins, for example 50m or 1.5b (default 50m)",
+    )
+    backtest_parser.add_argument(
+        "--timestep",
+        choices=list(TIMESTEP_SECONDS),
+        default="5m",
+        help="stored window size to replay (default 5m)",
+    )
+    backtest_parser.add_argument(
+        "--fill-share",
+        type=_non_negative_float,
+        default=defaults.fill_share * 100,
+        metavar="PERCENT",
+        help="share of each later window's volume an offer can fill (default 10)",
+    )
+    backtest_parser.add_argument(
+        "--offer-hours",
+        type=_positive_float,
+        default=defaults.offer_lifetime_seconds / 3600,
+        help="hours before an unfilled offer is cancelled (default 4)",
+    )
+    backtest_parser.set_defaults(run=run_backtest_command)
+
+
 def run_scan(args: argparse.Namespace, runtime: Runtime) -> int:
     settings = ScanSettings(
         min_volume=args.min_volume,
@@ -251,6 +319,115 @@ def run_status(args: argparse.Namespace, runtime: Runtime) -> int:
     return 0
 
 
+def run_backtest_command(args: argparse.Namespace, runtime: Runtime) -> int:
+    db_path = runtime.settings.db_path
+    if not Path(db_path).exists():
+        print(f"No database at {db_path} yet. Run flipwatch collect to start one.")
+        return 1
+    try:
+        settings = BacktestSettings(
+            starting_capital=args.capital,
+            fill_share=args.fill_share / 100,
+            offer_lifetime_seconds=round(args.offer_hours * 3600),
+        )
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+
+    with Store.open(db_path) as store:
+        end = args.end or store.latest_window_end(args.timestep)
+        if end is None:
+            print(f"error: no {args.timestep} data stored yet", file=sys.stderr)
+            return 1
+        start = args.start or end - args.days * SECONDS_PER_DAY
+        if start >= end:
+            print("error: the start must be before the end", file=sys.stderr)
+            return 1
+
+        items = store.items()
+        item_ids = args.items or store.top_items_by_volume(args.timestep, start, end, args.top)
+        unusable = [i for i in item_ids if i not in items or items[i].buy_limit is None]
+        if unusable:
+            print(f"error: no stored item with a buy limit for ids {unusable}", file=sys.stderr)
+            return 1
+        windows = store.windows_between(args.timestep, start, end, item_ids)
+        if not windows:
+            print("error: no stored data for those items in that period", file=sys.stderr)
+            return 1
+
+        strategy = STRATEGIES[args.strategy]()
+        result = run_backtest(
+            strategy,
+            windows,
+            {i: items[i] for i in item_ids},
+            TIMESTEP_SECONDS[args.timestep],
+            start,
+            end,
+            settings,
+        )
+        run_id = store.save_backtest(result, created_at=int(runtime.clock()))
+
+    print(format_backtest(result, run_id, item_count=len(item_ids)))
+    return 0
+
+
+def format_backtest(result: BacktestResult, run_id: int, item_count: int) -> str:
+    hours = (result.end - result.start) / 3600
+    first = collector.format_timestamp(result.start)
+    last = collector.format_timestamp(result.end)
+    summary = [
+        ("Realised profit", f"{result.realised_profit:,}"),
+        ("Profit per hour", f"{result.profit_per_hour:,.0f}"),
+        ("Fill rate", f"{result.fill_rate:.1%}"),
+        ("Peak capital used", f"{result.peak_capital_committed:,}"),
+        (
+            "Max drawdown",
+            f"{result.max_drawdown:,} ({result.max_drawdown_percent:.1%})",
+        ),
+        ("Offers placed", f"{result.offers_placed:,} ({result.offers_rejected:,} rejected)"),
+        (
+            "Unsold stock",
+            f"{result.held_stock_cost:,} at cost, {result.held_stock_value:,} if sold now",
+        ),
+    ]
+    label_width = max(len(label) for label, _ in summary)
+    value_width = max(len(value) for _, value in summary)
+    lines = [
+        f"Backtest {run_id}: {result.strategy} strategy, "
+        f"{result.timestep_seconds // 60} minute windows",
+        f"{first} to {last} ({hours:,.1f} hours), {item_count} items, "
+        f"{result.settings.starting_capital:,} starting capital",
+        "",
+        *(f"{label.ljust(label_width)}  {value.rjust(value_width)}" for label, value in summary),
+    ]
+    traded = [item for item in result.items if item.filled]
+    if traded:
+        lines += [
+            "",
+            render_table(
+                ["Item", "Bought", "Sold", "Spent", "Received", "Profit", "Fill"],
+                [
+                    [
+                        _truncate(item.name, MAX_NAME_WIDTH),
+                        f"{item.bought:,}",
+                        f"{item.sold:,}",
+                        f"{item.spent:,}",
+                        f"{item.received:,}",
+                        f"{item.realised_profit:,}",
+                        f"{item.fill_rate:.0%}",
+                    ]
+                    for item in traded[:20]
+                ],
+            ),
+        ]
+    lines += [
+        "",
+        "Unsold stock is not counted as profit. A backtest is an estimate under a "
+        "conservative fill model, not a promise of future profit.",
+    ]
+    return "\n".join(lines)
+
+
 def _configure_logging() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     # httpx logs every request at INFO, which would double the output of each run.
@@ -274,9 +451,12 @@ _COLUMNS: list[tuple[str, Callable[[Opportunity], str]]] = [
 
 
 def format_table(opportunities: Sequence[Opportunity]) -> str:
-    """Lay out opportunities as an aligned text table. Text is left aligned, numbers right."""
     headers = [header for header, _ in _COLUMNS]
-    rows = [[cell(o) for _, cell in _COLUMNS] for o in opportunities]
+    return render_table(headers, [[cell(o) for _, cell in _COLUMNS] for o in opportunities])
+
+
+def render_table(headers: list[str], rows: list[list[str]]) -> str:
+    """Lay out rows as an aligned text table. The first column is left aligned, the rest right."""
     widths = [max(len(row[i]) for row in [headers, *rows]) for i in range(len(headers))]
 
     def line(cells: list[str]) -> str:
@@ -291,6 +471,33 @@ def format_table(opportunities: Sequence[Opportunity]) -> str:
 
 def _truncate(text: str, width: int) -> str:
     return text if len(text) <= width else text[: width - 3] + "..."
+
+
+def parse_coins(value: str) -> int:
+    """Read an amount such as 50000000, 50m, 250k or 1.5b."""
+    match = re.fullmatch(r"\s*([0-9]+(?:\.[0-9]+)?)\s*([kmb]?)\s*", value.lower().replace(",", ""))
+    if match is None:
+        raise argparse.ArgumentTypeError(f"not an amount of coins: {value}")
+    number, suffix = match.groups()
+    coins = round(float(number) * {"": 1, "k": 10**3, "m": 10**6, "b": 10**9}[suffix])
+    if coins <= 0:
+        raise argparse.ArgumentTypeError(f"must be greater than zero, got {value}")
+    return coins
+
+
+def _parse_date(value: str) -> int:
+    try:
+        day = datetime.strptime(value, "%Y-%m-%d").replace(tzinfo=UTC)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"dates look like 2026-10-01, got {value}") from None
+    return int(day.timestamp())
+
+
+def _positive_float(value: str) -> float:
+    number = float(value)
+    if number <= 0:
+        raise argparse.ArgumentTypeError(f"must be greater than zero, got {value}")
+    return number
 
 
 def _positive_int(value: str) -> int:

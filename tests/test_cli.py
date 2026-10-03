@@ -5,10 +5,10 @@ from typing import Any, Self
 import pytest
 
 from flipwatch.api import ApiError
-from flipwatch.cli import main
+from flipwatch.cli import main, parse_coins
 from flipwatch.config import Settings
 from flipwatch.models import Item, LatestPrice, PriceWindow
-from flipwatch.store import SCHEMA_VERSION
+from flipwatch.store import SCHEMA_VERSION, Store
 
 NOW = 1_791_066_600
 SYNAPSE = "Tormented synapse"
@@ -348,3 +348,114 @@ class TestStatus:
         assert run_command(fake_client, "status") == 1
 
         assert "newer than this code supports" in capsys.readouterr().err
+
+
+@pytest.fixture
+def market_db(db_path: Path) -> Path:
+    """Two days of five minute windows for two items with a steady margin."""
+    start = NOW - 2 * 24 * 3600
+    with Store.open(db_path) as store:
+        store.save_items([make_item(1, "Steady sword"), make_item(2, "Steady shield")])
+        for i in range(2 * 24 * 12):
+            timestamp = start + i * 300
+            windows = {
+                item_id: PriceWindow(item_id, timestamp, 1_200, 1_000, 1_000, 1_000)
+                for item_id in (1, 2)
+            }
+            store.save_snapshot("5m", timestamp, windows, collected_at=timestamp)
+    return db_path
+
+
+def make_item(item_id: int, name: str, buy_limit: int | None = 5_000) -> Item:
+    return Item(item_id, name, True, buy_limit, 100, 60, 40, f"{name}.png")
+
+
+class TestBacktest:
+    def test_prints_report_and_saves_the_run(
+        self, fake_client: FakeClient, capsys: pytest.CaptureFixture[str], market_db: Path
+    ) -> None:
+        assert run_command(fake_client, "backtest", "--days", "1") == 0
+
+        output = capsys.readouterr().out
+        assert output.startswith("Backtest 1: margin strategy, 5 minute windows")
+        assert "(24.0 hours), 2 items, 50,000,000 starting capital" in output
+        assert "Steady sword" in output
+        assert "not a promise of future profit" in output
+        with Store.open(market_db) as store:
+            runs = store.backtest_runs()
+        assert [run.strategy for run in runs] == ["margin"]
+        assert runs[0].realised_profit > 0
+
+    def test_options_reach_the_backtest(
+        self, fake_client: FakeClient, capsys: pytest.CaptureFixture[str], market_db: Path
+    ) -> None:
+        args = [
+            "backtest", "--strategy", "dip", "--items", "1", "--capital", "1.5m",
+            "--fill-share", "5", "--offer-hours", "2", "--start", "2026-10-02",
+        ]  # fmt: skip
+
+        assert run_command(fake_client, *args) == 0
+
+        with Store.open(market_db) as store:
+            result = store.backtest_run(store.backtest_runs()[0].id)
+        assert result is not None
+        assert result.strategy == "dip"
+        assert result.settings.starting_capital == 1_500_000
+        assert result.settings.fill_share == pytest.approx(0.05)
+        assert result.settings.offer_lifetime_seconds == 7_200
+        # Midnight UTC on 2 October 2026. The stored data starts earlier than that.
+        assert result.start == 1_790_899_200
+
+    @pytest.mark.parametrize(
+        ("args", "message"),
+        [
+            (["--items", "1", "99"], "no stored item with a buy limit for ids [99]"),
+            (["--timestep", "1h"], "no 1h data stored yet"),
+            (["--start", "2026-10-03", "--end", "2026-10-01"], "start must be before the end"),
+            (["--start", "2020-01-01", "--end", "2020-01-02"], "no stored data"),
+        ],
+    )
+    def test_errors(
+        self,
+        fake_client: FakeClient,
+        capsys: pytest.CaptureFixture[str],
+        market_db: Path,
+        args: list[str],
+        message: str,
+    ) -> None:
+        assert run_command(fake_client, "backtest", *args) == 1
+
+        assert message in capsys.readouterr().err
+
+    def test_missing_database(
+        self, fake_client: FakeClient, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        assert run_command(fake_client, "backtest") == 1
+
+        assert "No database at" in capsys.readouterr().out
+
+    @pytest.mark.parametrize(
+        "args",
+        [
+            ["--capital", "lots"],
+            ["--capital", "0"],
+            ["--days", "2", "--start", "2026-10-01"],
+            ["--items", "1", "--top", "5"],
+            ["--start", "1st October"],
+            ["--strategy", "martingale"],
+        ],
+    )
+    def test_invalid_options(self, fake_client: FakeClient, args: list[str]) -> None:
+        with pytest.raises(SystemExit) as exit_info:
+            run_command(fake_client, "backtest", *args)
+
+        assert exit_info.value.code == 2
+
+
+@pytest.mark.parametrize(
+    ("text", "coins"),
+    [("50000000", 50_000_000), ("50m", 50_000_000), ("1.5b", 1_500_000_000),
+     ("250K", 250_000), ("12,500", 12_500), (" 2m ", 2_000_000)],
+)  # fmt: skip
+def test_parse_coins(text: str, coins: int) -> None:
+    assert parse_coins(text) == coins
