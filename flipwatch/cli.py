@@ -125,7 +125,8 @@ def run_scan(args: argparse.Namespace, client: PricesClient, now: float) -> int:
     shown = opportunities[: args.top]
     print(format_table(shown))
     print()
-    print(f"Showing {len(shown)} of {len(opportunities)} flips, ranked by {args.sort}.")
+    noun = "flip" if len(opportunities) == 1 else "flips"
+    print(f"Showing {len(shown)} of {len(opportunities)} {noun}, ranked by {args.sort}.")
     print("Conf is liquidity multiplied by stability, each scored out of 100.")
     return 0
 

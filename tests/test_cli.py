@@ -128,6 +128,12 @@ def test_top_option(fake_client: FakeClient, capsys: pytest.CaptureFixture[str])
     assert "Showing 1 of 2 flips" in output
 
 
+def test_single_result_summary(fake_client: FakeClient, capsys: pytest.CaptureFixture[str]) -> None:
+    run(fake_client, "--min-profit", "790231")
+
+    assert "Showing 1 of 1 flip, ranked by profit." in capsys.readouterr().out
+
+
 @pytest.mark.parametrize(
     ("args", "expected"),
     [
