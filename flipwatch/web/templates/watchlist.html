@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}Watchlist{% endblock %}
+{% block content %}
+<h1>Watchlist</h1>
+
+<form class="filters" method="post" action="{{ url_for('dashboard.watchlist_add') }}">
+  <label>Item name or id <input name="item" required placeholder="Abyssal whip"></label>
+  <button type="submit">Add</button>
+</form>
+
+{% if error %}<p class="notice">{{ error }}</p>{% endif %}
+{% if api_error %}
+  <p class="notice error">Prices could not be loaded from the OSRS Wiki: {{ api_error }}. Try again in a minute.</p>
+{% elif not rows %}
+  <p class="empty">Nothing on the watchlist yet. Add items here or from an item's page.</p>
+{% else %}
+  <div class="table-wrap">
+  <table class="sortable">
+    <thead>
+      <tr>
+        <th data-type="text">Item</th><th>Buy</th><th>Sell</th><th>Margin</th><th>ROI</th>
+        <th>Profit</th><th>Confidence</th><th data-type="text">Status</th><th class="no-sort"><span class="visually-hidden">Remove</span></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in rows %}
+      {% set s = row.summary %}{% set o = row.opportunity %}
+      <tr>
+        <td><a href="{{ url_for('dashboard.item', item_id=row.item.id) }}">{{ row.item.name }}</a></td>
+        <td data-value="{{ s.buy_price if s else 0 }}">{{ s.buy_price | coins if s else "-" }}</td>
+        <td data-value="{{ s.sell_price if s else 0 }}">{{ s.sell_price | coins if s else "-" }}</td>
+        <td data-value="{{ s.margin if s else 0 }}">{{ s.margin | coins if s else "-" }}</td>
+        <td data-value="{{ s.roi if s else 0 }}">{{ s.roi | percent if s else "-" }}</td>
+        <td data-value="{{ o.potential_profit if o else 0 }}">{{ o.potential_profit | coins if o else "-" }}</td>
+        <td data-value="{{ o.confidence.score if o else 0 }}">{{ o.confidence.score if o else "-" }}</td>
+        <td>{% if o %}<span class="tag good">flip</span>{% else %}{{ row.reason }}{% endif %}</td>
+        <td>
+          <form method="post" action="{{ url_for('dashboard.unwatch_item', item_id=row.item.id) }}">
+            <button class="link" type="submit">Remove</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+{% endif %}
+{% endblock %}

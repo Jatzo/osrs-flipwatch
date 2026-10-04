@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}Backtest {{ run_id }}{% endblock %}
+{% block content %}
+<h1>Backtest {{ run_id }}: {{ result.strategy }}</h1>
+<p class="meta">
+  {{ result.start | utc_time }} to {{ result.end | utc_time }},
+  {{ result.timestep_seconds // 60 }} minute windows,
+  {% if result.universe %}{{ result.universe | length }} items,{% endif %}
+  {{ result.settings.starting_capital | coins }} starting capital,
+  {{ result.settings.fill_share | percent(0) }} fill share,
+  offers cancelled after {{ (result.settings.offer_lifetime_seconds / 3600) | round(1) }} hours.
+</p>
+
+<section class="cards">
+  <div class="card"><span class="label">Realised profit</span><span class="value">{{ result.realised_profit | coins }}</span></div>
+  <div class="card"><span class="label">Profit per hour</span><span class="value">{{ result.profit_per_hour | coins }}</span></div>
+  <div class="card"><span class="label">Fill rate</span><span class="value">{{ result.fill_rate | percent }}</span></div>
+  <div class="card"><span class="label">Peak capital used</span><span class="value">{{ result.peak_capital_committed | coins }}</span></div>
+  <div class="card"><span class="label">Max drawdown</span><span class="value">{{ result.max_drawdown | coins }}</span><span class="note">{{ result.max_drawdown_percent | percent }} of peak</span></div>
+  <div class="card"><span class="label">Offers placed</span><span class="value">{{ result.offers_placed | coins }}</span><span class="note">{{ result.offers_rejected }} rejected</span></div>
+  <div class="card"><span class="label">Unsold stock</span><span class="value">{{ result.held_stock_cost | coins }}</span><span class="note">at cost, {{ result.held_stock_value | coins }} if sold now</span></div>
+</section>
+
+<section>
+  <h2>Equity</h2>
+  {% if result.equity_curve %}
+    <div class="chart"><canvas id="equity-chart" aria-label="Coins plus stock valued at the last average low price"></canvas></div>
+    <p class="meta">Coins plus held stock valued at its last average low price after tax.</p>
+    <script type="application/json" id="equity-data">{{ chart | tojson }}</script>
+  {% endif %}
+</section>
+
+<section>
+  <h2>Items traded</h2>
+  {% if not traded %}
+    <p class="empty">No offers filled in this run.</p>
+  {% else %}
+    <div class="table-wrap">
+    <table class="sortable">
+      <thead>
+        <tr>
+          <th data-type="text">Item</th><th>Bought</th><th>Sold</th><th>Spent</th>
+          <th>Received</th><th aria-sort="descending">Profit</th><th>Fill rate</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in traded %}
+        <tr>
+          <td><a href="{{ url_for('dashboard.item', item_id=item.item_id) }}">{{ item.name }}</a></td>
+          <td data-value="{{ item.bought }}">{{ item.bought | coins }}</td>
+          <td data-value="{{ item.sold }}">{{ item.sold | coins }}</td>
+          <td data-value="{{ item.spent }}">{{ item.spent | coins }}</td>
+          <td data-value="{{ item.received }}">{{ item.received | coins }}</td>
+          <td data-value="{{ item.realised_profit }}" class="{{ 'loss' if item.realised_profit < 0 else '' }}">{{ item.realised_profit | coins }}</td>
+          <td data-value="{{ item.fill_rate }}">{{ item.fill_rate | percent(0) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    </div>
+  {% endif %}
+</section>
+
+<p class="meta">A backtest is an estimate under a conservative fill model, not a promise of future profit. Unsold stock is not counted as profit.</p>
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', filename='vendor/chart.umd.min.js') }}"></script>
+<script src="{{ url_for('static', filename='charts.js') }}"></script>
+{% endblock %}

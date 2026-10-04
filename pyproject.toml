@@ -11,6 +11,7 @@ license = "MIT"
 license-files = ["LICENSE"]
 requires-python = ">=3.12"
 dependencies = [
+    "flask>=3.0",
     "httpx>=0.28",
     "python-dotenv>=1.0",
 ]
@@ -27,6 +28,9 @@ dev = [
 
 [tool.setuptools.packages.find]
 include = ["flipwatch*"]
+
+[tool.setuptools.package-data]
+"flipwatch.web" = ["templates/*.html", "static/*.css", "static/*.js", "static/vendor/*"]
 
 [tool.ruff]
 line-length = 100

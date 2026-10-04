@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}Search{% endblock %}
+{% block content %}
+<h1>Items matching "{{ query }}"</h1>
+{% if not matches %}
+  <p class="empty">No items match. Try part of the name or the item id.</p>
+{% else %}
+  <ul class="results">
+    {% for item in matches %}
+    <li><a href="{{ url_for('dashboard.item', item_id=item.id) }}">{{ item.name }}</a></li>
+    {% endfor %}
+  </ul>
+{% endif %}
+{% endblock %}

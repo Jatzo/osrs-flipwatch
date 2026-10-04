@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}Backtests{% endblock %}
+{% block content %}
+<h1>Backtests</h1>
+
+<section>
+  <h2>Run a backtest</h2>
+  <form class="filters" method="post" action="{{ url_for('dashboard.start_backtest') }}">
+    <label>Strategy
+      <select name="strategy">
+        {% for name in strategies %}
+        <option value="{{ name }}" {% if form.values.strategy == name %}selected{% endif %}>{{ name }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Windows
+      <select name="timestep">
+        <option value="5m" {% if form.values.timestep == "5m" %}selected{% endif %}>5 minutes</option>
+        <option value="1h" {% if form.values.timestep == "1h" %}selected{% endif %}>1 hour</option>
+      </select>
+    </label>
+    <label>Days <input name="days" inputmode="numeric" value="{{ form.values.days }}" placeholder="7"></label>
+    <label>Start date <input name="start" type="date" value="{{ form.values.start }}"></label>
+    <label>Top items <input name="top" inputmode="numeric" value="{{ form.values.top }}" placeholder="50"></label>
+    <label>Or item ids <input name="items" value="{{ form.values["items"] }}" placeholder="4151 11802"></label>
+    <label>Capital <input name="capital" value="{{ form.values.capital }}" placeholder="50m"></label>
+    <label>Fill share % <input name="fill_share" inputmode="decimal" value="{{ form.values.fill_share }}" placeholder="10"></label>
+    <label>Offer hours <input name="offer_hours" inputmode="decimal" value="{{ form.values.offer_hours }}" placeholder="4"></label>
+    <button type="submit">Run</button>
+  </form>
+  <p class="meta">A start date replaces days. Item ids replace top items. Long periods can take a few seconds.</p>
+  {% for message in form.errors %}<p class="notice error">{{ message }}</p>{% endfor %}
+</section>
+
+<section>
+  <h2>Saved runs</h2>
+  {% if not runs %}
+    <p class="empty">No backtests yet.</p>
+  {% else %}
+    <div class="table-wrap">
+    <table class="sortable">
+      <thead>
+        <tr>
+          <th aria-sort="descending">Run</th><th data-type="text">Strategy</th>
+          <th data-type="text">Period</th><th>Realised profit</th><th data-type="text">Run at</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for run in runs %}
+        <tr>
+          <td data-value="{{ run.id }}"><a href="{{ url_for('dashboard.backtest', run_id=run.id) }}">{{ run.id }}</a></td>
+          <td>{{ run.strategy }}</td>
+          <td>{{ run.start | utc_time }} to {{ run.end | utc_time }}</td>
+          <td data-value="{{ run.realised_profit }}">{{ run.realised_profit | coins }}</td>
+          <td>{{ run.created_at | utc_time }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    </div>
+  {% endif %}
+</section>
+{% endblock %}

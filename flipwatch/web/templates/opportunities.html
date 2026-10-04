@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}Opportunities{% endblock %}
+{% block content %}
+<h1>Opportunities</h1>
+
+<form class="filters" method="get">
+  <label>Min margin <input name="min_margin" inputmode="numeric" value="{{ form.values.min_margin }}" placeholder="10"></label>
+  <label>Min profit <input name="min_profit" inputmode="numeric" value="{{ form.values.min_profit }}" placeholder="500000"></label>
+  <label>Min ROI % <input name="min_roi" inputmode="decimal" value="{{ form.values.min_roi }}" placeholder="0"></label>
+  <label>Min volume <input name="min_volume" inputmode="numeric" value="{{ form.values.min_volume }}" placeholder="50"></label>
+  <label>Max buy price <input name="max_price" inputmode="numeric" value="{{ form.values.max_price }}" placeholder="any"></label>
+  <label>Items
+    <select name="membership">
+      {% for value, label in [("any", "All"), ("members", "Members"), ("f2p", "Free to play")] %}
+      <option value="{{ value }}" {% if form.values.membership == value %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>No buy limit
+    <select name="no_limit">
+      <option value="skip" {% if form.values.no_limit == "skip" %}selected{% endif %}>Skip</option>
+      <option value="volume" {% if form.values.no_limit == "volume" %}selected{% endif %}>Cap by volume</option>
+    </select>
+  </label>
+  <button type="submit">Apply</button>
+  <a class="button-link" href="{{ url_for('dashboard.opportunities') }}">Reset</a>
+</form>
+
+{% for message in form.errors %}<p class="notice">{{ message }}</p>{% endfor %}
+
+{% if api_error %}
+  <p class="notice error">Prices could not be loaded from the OSRS Wiki: {{ api_error }}. Try again in a minute.</p>
+{% elif not opportunities %}
+  <p class="empty">No flips match these filters right now.</p>
+{% else %}
+  <p class="meta">
+    Showing {{ opportunities | length }} of {{ total }} {{ "flip" if total == 1 else "flips" }}. Click a column to sort.
+    Confidence is liquidity multiplied by stability, each scored out of 100.
+  </p>
+  <div class="table-wrap">
+  <table class="sortable">
+    <thead>
+      <tr>
+        <th data-type="text">Item</th>
+        <th>Buy</th><th>Sell</th><th>Margin</th><th>ROI</th><th>Limit</th>
+        <th>Vol/h</th><th>Qty</th><th aria-sort="descending">Profit</th><th>Confidence</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for o in opportunities %}
+      <tr>
+        <td>
+          <a href="{{ url_for('dashboard.item', item_id=o.item.id) }}">{{ o.item.name }}</a>
+          {% if o.item.id in watched %}<span class="tag">watched</span>{% endif %}
+        </td>
+        <td data-value="{{ o.buy_price }}">{{ o.buy_price | coins }}</td>
+        <td data-value="{{ o.sell_price }}">{{ o.sell_price | coins }}</td>
+        <td data-value="{{ o.margin }}">{{ o.margin | coins }}</td>
+        <td data-value="{{ o.roi }}">{{ o.roi | percent }}</td>
+        <td data-value="{{ o.item.buy_limit or 0 }}">{{ o.item.buy_limit | coins }}</td>
+        <td data-value="{{ o.tradeable_volume }}">{{ o.tradeable_volume | coins }}</td>
+        <td data-value="{{ o.quantity }}">{{ o.quantity | coins }}</td>
+        <td data-value="{{ o.potential_profit }}">{{ o.potential_profit | coins }}</td>
+        <td data-value="{{ o.confidence.score }}">
+          <span class="score" title="Liquidity {{ (o.confidence.liquidity * 100) | round | int }}, stability {{ (o.confidence.stability * 100) | round | int }}">{{ o.confidence.score }}</span>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}{{ item.name }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>{{ item.name }}</h1>
+  <form method="post" action="{{ url_for('dashboard.unwatch_item' if watched else 'dashboard.watch_item', item_id=item.id) }}">
+    <input type="hidden" name="next" value="{{ request.path }}">
+    <button type="submit">{{ "Remove from watchlist" if watched else "Add to watchlist" }}</button>
+  </form>
+</div>
+<p class="meta">
+  {{ "Members" if item.members else "Free to play" }} item,
+  buy limit {{ item.buy_limit | coins if item.buy_limit else "not listed" }}.
+  <a href="https://prices.runescape.wiki/osrs/item/{{ item.id }}">View on the wiki prices site</a>.
+</p>
+
+<section class="cards">
+  <div class="card"><span class="label">Buy at</span><span class="value">{{ summary.buy_price | coins if summary else "-" }}</span></div>
+  <div class="card"><span class="label">Sell at</span><span class="value">{{ summary.sell_price | coins if summary else "-" }}</span></div>
+  <div class="card"><span class="label">Tax</span><span class="value">{{ summary.tax | coins if summary else "-" }}</span></div>
+  <div class="card"><span class="label">Margin</span><span class="value">{{ summary.margin | coins if summary else "-" }}</span></div>
+  <div class="card"><span class="label">ROI</span><span class="value">{{ summary.roi | percent if summary else "-" }}</span></div>
+  {% if opportunity %}
+  <div class="card"><span class="label">Quantity</span><span class="value">{{ opportunity.quantity | coins }}</span></div>
+  <div class="card"><span class="label">Potential profit</span><span class="value">{{ opportunity.potential_profit | coins }}</span></div>
+  <div class="card"><span class="label">Confidence</span><span class="value">{{ opportunity.confidence.score }}</span></div>
+  {% endif %}
+</section>
+{% if reason %}
+  <p class="notice">Not listed as a flip right now: {{ reason }}.</p>
+{% endif %}
+{% if latest %}
+  <p class="meta">Last instant buy {{ latest.high_time | utc_time }}, last instant sell {{ latest.low_time | utc_time }}.</p>
+{% endif %}
+
+<section>
+  <div class="page-head">
+    <h2>Price history</h2>
+    <nav class="ranges" aria-label="Chart range">
+      {% for key in ranges %}
+      <a href="{{ url_for('dashboard.item', item_id=item.id, range=key) }}" {% if key == chart_range %}aria-current="page"{% endif %}>{{ key }}</a>
+      {% endfor %}
+    </nav>
+  </div>
+  {% if history.error %}
+    <p class="notice error">History could not be loaded: {{ history.error }}.</p>
+  {% elif not history.windows %}
+    <p class="empty">No price history for this range.</p>
+  {% else %}
+    <div class="chart"><canvas id="price-chart" aria-label="Average high and low prices"></canvas></div>
+    <div class="chart chart-small"><canvas id="volume-chart" aria-label="Volume traded"></canvas></div>
+    <p class="meta">Averages from {{ history.source }}.</p>
+    <script type="application/json" id="price-data">{{ chart | tojson }}</script>
+  {% endif %}
+</section>
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', filename='vendor/chart.umd.min.js') }}"></script>
+<script src="{{ url_for('static', filename='charts.js') }}"></script>
+{% endblock %}
