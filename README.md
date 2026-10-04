@@ -1,5 +1,7 @@
 # OSRS Flipwatch
 
+[![CI](https://github.com/Jatzo/osrs-flipwatch/actions/workflows/ci.yml/badge.svg)](https://github.com/Jatzo/osrs-flipwatch/actions/workflows/ci.yml)
+
 Finds profitable Grand Exchange flips in Old School RuneScape, backtests flipping strategies against historic prices and alerts you in a dashboard when a good margin opens up.
 
 ![The opportunities page, listing flips with their margin, volume, potential profit and confidence](docs/dashboard.png)
