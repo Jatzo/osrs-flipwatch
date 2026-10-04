@@ -73,10 +73,6 @@ class PriceWindow:
     avg_low_price: int | None
     low_volume: int
 
-    @property
-    def total_volume(self) -> int:
-        return self.high_volume + self.low_volume
-
     @classmethod
     def from_api(cls, item_id: int, timestamp: int, record: Mapping[str, Any]) -> "PriceWindow":
         return cls(

@@ -79,7 +79,6 @@ def test_price_window(five_minute_payload: dict[str, Any]) -> None:
         avg_low_price=808931,
         low_volume=14,
     )
-    assert window.total_volume == 20
 
 
 def test_one_sided_price_window(five_minute_payload: dict[str, Any]) -> None:
@@ -89,7 +88,6 @@ def test_one_sided_price_window(five_minute_payload: dict[str, Any]) -> None:
 
     assert window.avg_low_price is None
     assert window.low_volume == 0
-    assert window.total_volume == 1
 
 
 def test_timeseries_points_parse_as_price_windows(timeseries_payload: dict[str, Any]) -> None:

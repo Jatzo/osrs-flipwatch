@@ -1,7 +1,7 @@
 import pytest
 
 from flipwatch.config import GE_TAX_CAP, GE_TAX_EXEMPT_ITEM_IDS
-from flipwatch.tax import ge_tax, net_sale_proceeds
+from flipwatch.tax import ge_tax
 
 ABYSSAL_WHIP = 4151
 OLD_SCHOOL_BOND = 13190
@@ -56,12 +56,7 @@ def test_negative_price_is_rejected() -> None:
         ge_tax(-1)
 
 
-def test_net_sale_proceeds() -> None:
-    assert net_sale_proceeds(100, ABYSSAL_WHIP) == 98
-    assert net_sale_proceeds(11_396_421, OLD_SCHOOL_BOND) == 11_396_421
-
-
 def test_selling_at_a_multiple_of_50_nets_the_same_as_one_coin_less() -> None:
     # The wiki notes that undercutting a price that is an exact multiple of 50 is free.
-    assert net_sale_proceeds(50) == net_sale_proceeds(49) == 49
-    assert net_sale_proceeds(100) == net_sale_proceeds(99) == 98
+    assert 50 - ge_tax(50) == 49 - ge_tax(49) == 49
+    assert 100 - ge_tax(100) == 99 - ge_tax(99) == 98
