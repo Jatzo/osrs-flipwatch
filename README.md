@@ -2,20 +2,56 @@
 
 Finds profitable Grand Exchange flips in Old School RuneScape, backtests flipping strategies against historic prices and alerts you in a dashboard when a good margin opens up.
 
-This project is in early development.
+<!-- Screenshot: save a dashboard screenshot as docs/dashboard.png and replace this comment with ![The opportunities page](docs/dashboard.png) -->
+
+## What it does
+
+Flipping means buying an item on the Grand Exchange at the price sellers dump it for and selling it at the price buyers pay to get it straight away. Flipwatch watches every tradeable item, works out which gaps are still worth taking once the 2% tax is paid, and ranks them by how much they could make within the buy limit and recent trading volume. Each flip carries a confidence score, because a big margin on a handful of trades is usually a trap.
+
+It can also record price history, replay that history through a trading strategy to estimate how it would have done, and show everything in a local dashboard that raises an alert when a flip worth making appears.
+
+## How it works
+
+All prices come from the OSRS Wiki real-time prices API, which reports the latest instant buy and sell price for every item and averages over five minute and one hour windows. The client identifies itself to the wiki, caches item data for a day and prices for a minute, and only ever uses the bulk endpoints for the whole market.
+
+The scanner combines the latest prices with last hour's volume to find flips, applying the tax rules, buy limits and the filters described below. The collector saves the five minute averages to a SQLite database on a schedule, and the backtester replays them through a strategy with a deliberately cautious model of which offers would have filled.
+
+The dashboard is a small Flask app over the same code. It shows the scan, a chart for each item, a watchlist, backtest results and alerts, so the command line and the browser always agree.
 
 ## Quick start
 
-Python 3.12 or later is required.
+You need Python 3.12 or later. On Windows:
 
 ```
+git clone https://github.com/Jatzo/OSRS-Flipping-Tool.git
+cd OSRS-Flipping-Tool
 python -m venv .venv
+.venv\Scripts\activate
 pip install -e ".[dev]"
-cp .env.example .env
-pytest
+copy .env.example .env
 ```
 
-Set `FLIPWATCH_USER_AGENT` in `.env` before talking to the API. The OSRS Wiki blocks requests that do not identify the project and give a contact.
+On macOS or Linux, activate with `source .venv/bin/activate` and copy with `cp .env.example .env`.
+
+Open `.env` and set `FLIPWATCH_USER_AGENT` to something that names the project and gives your own contact, such as your GitHub address. The OSRS Wiki blocks requests that do not identify themselves, and the example value points at this repository rather than at you.
+
+Then try it:
+
+```
+flipwatch scan
+flipwatch collect --once
+flask --app flipwatch.web run
+```
+
+The last command starts the dashboard at http://127.0.0.1:5000.
+
+To run the tests and the linter:
+
+```
+pytest
+ruff check .
+ruff format --check .
+```
 
 ## Finding flips
 
@@ -103,7 +139,7 @@ An alert needs a margin of at least 10 coins, 1% ROI, 500,000 coins of potential
 
 Settings come from environment variables or a `.env` file. See `.env.example` for the full list.
 
-`FLIPWATCH_USER_AGENT` is required and should name the project and give a contact. `FLIPWATCH_DB_PATH` sets where the database lives (default `flipwatch.sqlite3`) and `FLIPWATCH_RETENTION_DAYS` sets how long price data is kept (default 90). The `FLIPWATCH_ALERT_` variables set the alert rules and cooldown.
+`FLIPWATCH_USER_AGENT` should name the project and give a contact. Anything that calls the API (the scan, the collector, seeding and the dashboard) refuses to run without it, while `flipwatch status` and backtests work offline. `FLIPWATCH_DB_PATH` sets where the database lives (default `flipwatch.sqlite3`) and `FLIPWATCH_RETENTION_DAYS` sets how long price data is kept (default 90). The `FLIPWATCH_ALERT_` variables set the alert rules and cooldown.
 
 ## Data source
 
