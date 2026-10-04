@@ -3,7 +3,7 @@ from typing import Any
 
 import pytest
 
-from flipwatch.models import Item, LatestPrice, PriceWindow
+from flipwatch.models import Item, LatestPrice, Opportunity, PriceWindow
 from flipwatch.scanner import (
     NoLimitPolicy,
     ScanSettings,
@@ -70,7 +70,7 @@ def evaluate_one(
     price: LatestPrice | None = None,
     window: PriceWindow | None = None,
     settings: ScanSettings = SETTINGS,
-):
+) -> Opportunity | None:
     return evaluate(
         item or make_item(), price or make_price(), window or make_window(), settings, NOW
     )
