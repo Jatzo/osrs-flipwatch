@@ -500,3 +500,55 @@ class TestCrossSiteRequests:
 
     def test_cross_site_reads_are_unaffected(self, client: FlaskClient) -> None:
         assert client.get("/", headers={"Origin": "http://evil.example"}).status_code == 200
+
+
+class TestPlan:
+    def test_plans_with_the_default_settings(self, client: FlaskClient) -> None:
+        response = client.get("/plan")
+
+        page = text(response)
+        assert response.status_code == 200
+        assert "Noxious halberd" in page
+        assert "Tormented synapse" not in page
+        assert "158,046" in page
+        assert "39,512" in page
+        assert "1 of 8" in page
+
+    def test_settings_come_from_the_query_string(self, client: FlaskClient) -> None:
+        page = text(client.get("/plan?capital=78m&min_confidence=0&slots=2"))
+
+        assert "Tormented synapse" in page
+        assert "Noxious halberd" in page
+        assert "2 of 2" in page
+
+    def test_free_to_play_with_nothing_worth_a_slot(self, client: FlaskClient) -> None:
+        page = text(client.get("/plan?membership=f2p"))
+
+        assert "No flips are worth a slot right now" in page
+
+    @pytest.mark.parametrize(
+        ("query", "message"),
+        [
+            ("capital=lots", "Starting capital should look like 50m"),
+            ("slots=0", "Slots must be at least 1"),
+            ("min_confidence=101", "confidence 0 to 100"),
+        ],
+    )
+    def test_bad_input_is_reported(self, client: FlaskClient, query: str, message: str) -> None:
+        response = client.get(f"/plan?{query}")
+
+        assert response.status_code == 200
+        assert message in text(response)
+
+    def test_api_failure_shows_a_message(
+        self, client: FlaskClient, fake_client: FakeClient
+    ) -> None:
+        fake_client._error = ApiError("/mapping returned HTTP 503")
+
+        response = client.get("/plan")
+
+        assert response.status_code == 502
+        assert "/mapping returned HTTP 503" in text(response)
+
+    def test_plan_is_in_the_navigation(self, client: FlaskClient) -> None:
+        assert 'href="/plan"' in text(client.get("/"))

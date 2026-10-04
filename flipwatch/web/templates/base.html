@@ -14,6 +14,8 @@
       {% set endpoint = request.endpoint or "" %}
       <a href="{{ url_for('dashboard.opportunities') }}"
          {% if endpoint == "dashboard.opportunities" %}aria-current="page"{% endif %}>Opportunities</a>
+      <a href="{{ url_for('dashboard.plan') }}"
+         {% if endpoint == "dashboard.plan" %}aria-current="page"{% endif %}>Plan</a>
       <a href="{{ url_for('dashboard.watchlist') }}"
          {% if endpoint.startswith("dashboard.watch") %}aria-current="page"{% endif %}>Watchlist</a>
       <a href="{{ url_for('dashboard.backtests') }}"

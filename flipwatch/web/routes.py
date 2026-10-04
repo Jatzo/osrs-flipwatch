@@ -9,6 +9,7 @@ from flipwatch.alerts import check_for_alerts, current_status
 from flipwatch.api import ApiError
 from flipwatch.config import EXCLUDED_ITEM_IDS
 from flipwatch.models import Alert, Item, LatestPrice, Opportunity, PriceWindow
+from flipwatch.planner import ROUND_HOURS, make_plan, plan_scan_settings
 from flipwatch.runner import STRATEGIES, BacktestRequestError, run_and_save
 from flipwatch.scanner import ScanSettings, assess, margin_at, rank, scan
 from flipwatch.web import forms, market
@@ -65,6 +66,26 @@ def opportunities() -> Page:
         opportunities=ranked[:MAX_OPPORTUNITY_ROWS],
         total=len(ranked),
         watched=set(store().watchlist()),
+    )
+
+
+@bp.get("/plan")
+def plan() -> Page:
+    settings, free_to_play, form = forms.plan_settings(request.args)
+    app = dashboard()
+    try:
+        found = scan(
+            app.client.mapping(),
+            app.client.latest(),
+            app.client.one_hour(),
+            plan_scan_settings(free_to_play),
+            app.clock(),
+        )
+    except ApiError as exc:
+        page = render_template("plan.html", form=form, api_error=str(exc), round_hours=ROUND_HOURS)
+        return page, 502
+    return render_template(
+        "plan.html", form=form, plan=make_plan(found, settings), round_hours=ROUND_HOURS
     )
 
 

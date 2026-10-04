@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}Plan{% endblock %}
+{% block content %}
+<h1>Plan your slots</h1>
+
+<form class="filters" method="get">
+  <label>Cash <input name="capital" value="{{ form.values.capital }}" placeholder="50m"></label>
+  <label>Slots <input name="slots" inputmode="numeric" value="{{ form.values.slots }}" placeholder="8"></label>
+  <label>Min confidence <input name="min_confidence" inputmode="numeric" value="{{ form.values.min_confidence }}" placeholder="40"></label>
+  <label>Items
+    <select name="membership">
+      <option value="any" {% if form.values.membership == "any" %}selected{% endif %}>All</option>
+      <option value="f2p" {% if form.values.membership == "f2p" %}selected{% endif %}>Free to play</option>
+    </select>
+  </label>
+  <div class="form-actions">
+    <button type="submit">Plan</button>
+    <a class="button-link" href="{{ url_for('dashboard.plan') }}">Reset</a>
+  </div>
+</form>
+
+{% for message in form.errors %}<p class="notice">{{ message }}</p>{% endfor %}
+
+{% if api_error %}
+  <p class="notice error">Prices could not be loaded from the OSRS Wiki: {{ api_error }}. Try again in a minute.</p>
+{% elif not plan.flips %}
+  <p class="empty">No flips are worth a slot right now with these settings. Try more cash or a lower confidence.</p>
+{% else %}
+  <section class="cards">
+    <div class="card"><span class="label">Profit per round</span><span class="value">{{ plan.profit | coins }}</span></div>
+    <div class="card"><span class="label">About per hour</span><span class="value">{{ plan.profit_per_hour | coins }}</span></div>
+    <div class="card"><span class="label">Cash used</span><span class="value">{{ plan.cash_used | coins }}</span><span class="note">of {{ plan.settings.capital | coins }}</span></div>
+    <div class="card"><span class="label">Cash left</span><span class="value">{{ plan.cash_left | coins }}</span></div>
+    <div class="card"><span class="label">Slots used</span><span class="value">{{ plan.flips | length }} of {{ plan.settings.slots }}</span></div>
+  </section>
+
+  <div class="table-wrap">
+  <table class="sortable">
+    <thead>
+      <tr>
+        <th data-type="text">Item</th><th>Buy at</th><th>Sell at</th><th>Quantity</th>
+        <th>Cash needed</th><th aria-sort="descending">Profit</th><th>Confidence</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for f in plan.flips %}
+      {% set o = f.opportunity %}
+      <tr>
+        <td><a href="{{ url_for('dashboard.item', item_id=o.item.id) }}">{{ o.item.name }}</a></td>
+        <td data-value="{{ o.buy_price }}">{{ o.buy_price | coins }}</td>
+        <td data-value="{{ o.sell_price }}">{{ o.sell_price | coins }}</td>
+        <td data-value="{{ f.quantity }}">{{ f.quantity | coins }}</td>
+        <td data-value="{{ f.cost }}">{{ f.cost | coins }}</td>
+        <td data-value="{{ f.profit }}">{{ f.profit | coins }}</td>
+        <td data-value="{{ o.confidence.score }}">{{ o.confidence.score }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+{% endif %}
+
+<p class="meta">
+  Each slot takes the flip that adds the most profit with the cash left, buying fewer of an
+  item when the cash runs short. Quantities are the same cautious estimates as the
+  opportunities page. A round can repeat every {{ round_hours | int }} hours when buy limits
+  reset, so the hourly figure assumes every offer fills within that time.
+</p>
+{% endblock %}

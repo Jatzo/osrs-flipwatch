@@ -11,6 +11,7 @@ from datetime import UTC, datetime
 
 from flipwatch.backtest import BacktestSettings
 from flipwatch.coins import parse_coins
+from flipwatch.planner import PlanSettings
 from flipwatch.runner import STRATEGIES, BacktestRequest
 from flipwatch.scanner import NoLimitPolicy, ScanSettings
 
@@ -107,6 +108,23 @@ def backtest_request(args: Mapping[str, str]) -> tuple[BacktestRequest, Form]:
         ),
     )
     return request, form
+
+
+def plan_settings(args: Mapping[str, str]) -> tuple[PlanSettings, bool, Form]:
+    """Read the plan form. Returns the settings and whether to plan free to play items only."""
+    defaults = PlanSettings()
+    form = Form()
+    capital = _capital(args, form, defaults.capital)
+    slots = form.number(args, "slots", "Slots", defaults.slots)
+    min_confidence = form.number(
+        args, "min_confidence", "Minimum confidence", defaults.min_confidence
+    )
+    membership = form.choice(args, "membership", ["any", "f2p"], "any")
+    if slots < 1 or min_confidence > 100:
+        form.errors.append("Slots must be at least 1 and confidence 0 to 100.")
+        slots, min_confidence = defaults.slots, defaults.min_confidence
+    settings = PlanSettings(capital=capital, slots=int(slots), min_confidence=int(min_confidence))
+    return settings, membership == "f2p", form
 
 
 def _capital(args: Mapping[str, str], form: Form, default: int) -> int:
