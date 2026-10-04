@@ -10,7 +10,7 @@ from collections.abc import Callable
 from flask import Flask
 
 from flipwatch.api import PricesClient
-from flipwatch.config import Settings, load_settings
+from flipwatch.config import Settings, load_settings, require_user_agent
 from flipwatch.web import context, filters, routes
 
 
@@ -21,6 +21,7 @@ def create_app(
     clock: Callable[[], float] = time.time,
 ) -> Flask:
     settings = settings or load_settings()
+    require_user_agent(settings)
     app = Flask(__name__)
     context.install(app, context.Dashboard(settings, client_factory(settings), clock))
     filters.register(app)

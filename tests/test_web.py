@@ -7,7 +7,7 @@ from flask.testing import FlaskClient
 from werkzeug.test import TestResponse
 
 from flipwatch.api import ApiError
-from flipwatch.config import AlertSettings, Settings
+from flipwatch.config import AlertSettings, ConfigError, Settings
 from flipwatch.models import Item, PriceWindow
 from flipwatch.store import Store
 from flipwatch.web import create_app
@@ -439,3 +439,8 @@ class TestAlerts:
 
     def test_check_needs_a_post(self, client: FlaskClient) -> None:
         assert client.get("/alerts/check").status_code == 405
+
+
+def test_dashboard_refuses_to_start_without_a_user_agent(db_path: Path) -> None:
+    with pytest.raises(ConfigError, match="FLIPWATCH_USER_AGENT"):
+        create_app(Settings(db_path=str(db_path)))

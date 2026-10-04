@@ -11,7 +11,7 @@ from typing import Any, Self
 
 import httpx
 
-from flipwatch.config import ConfigError, Settings
+from flipwatch.config import Settings, require_user_agent
 from flipwatch.models import Item, LatestPrice, PriceWindow
 
 MAPPING_TTL_SECONDS = 24 * 60 * 60
@@ -60,8 +60,7 @@ class PricesClient:
         clock: Clock = time.monotonic,
         transport: httpx.BaseTransport | None = None,
     ) -> None:
-        if not settings.user_agent.strip():
-            raise ConfigError("A descriptive user agent is required to use the prices API.")
+        require_user_agent(settings)
         self._http = httpx.Client(
             base_url=settings.api_base_url,
             headers={"User-Agent": settings.user_agent},

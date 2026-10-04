@@ -50,7 +50,7 @@ def client(clock: FakeClock, api: respx.MockRouter) -> Iterator[PricesClient]:
 
 
 def test_requires_user_agent() -> None:
-    with pytest.raises(ConfigError, match="user agent"):
+    with pytest.raises(ConfigError, match="FLIPWATCH_USER_AGENT"):
         PricesClient(Settings(user_agent="  ", api_base_url=BASE_URL))
 
 

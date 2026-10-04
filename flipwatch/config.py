@@ -104,7 +104,8 @@ class AlertSettings:
 
 @dataclass(frozen=True)
 class Settings:
-    user_agent: str
+    # Only commands that call the prices API need this, so it is checked there.
+    user_agent: str = ""
     api_base_url: str = DEFAULT_API_BASE_URL
     http_timeout_seconds: float = DEFAULT_HTTP_TIMEOUT_SECONDS
     db_path: str = DEFAULT_DB_PATH
@@ -119,16 +120,8 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
         load_dotenv()
         env = os.environ
 
-    user_agent = env.get("FLIPWATCH_USER_AGENT", "").strip()
-    if not user_agent:
-        raise ConfigError(
-            "FLIPWATCH_USER_AGENT is not set. The OSRS Wiki blocks generic user agents, "
-            "so set it to something that names the project and gives a contact, for example "
-            "'osrs-flipwatch (github.com/USERNAME/OSRS-Flipping-Tool)'."
-        )
-
     return Settings(
-        user_agent=user_agent,
+        user_agent=env.get("FLIPWATCH_USER_AGENT", "").strip(),
         api_base_url=env.get("FLIPWATCH_API_BASE_URL", DEFAULT_API_BASE_URL).rstrip("/"),
         http_timeout_seconds=_positive_float(
             env, "FLIPWATCH_HTTP_TIMEOUT_SECONDS", DEFAULT_HTTP_TIMEOUT_SECONDS
@@ -137,6 +130,16 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
         retention_days=_non_negative_int(env, "FLIPWATCH_RETENTION_DAYS", DEFAULT_RETENTION_DAYS),
         alerts=_alert_settings(env),
     )
+
+
+def require_user_agent(settings: Settings) -> None:
+    """Refuse to talk to the prices API without a descriptive user agent."""
+    if not settings.user_agent.strip():
+        raise ConfigError(
+            "FLIPWATCH_USER_AGENT is not set. The OSRS Wiki blocks generic user agents, "
+            "so set it to something that names the project and gives a contact, for example "
+            "'osrs-flipwatch (github.com/USERNAME/OSRS-Flipping-Tool)'."
+        )
 
 
 def _alert_settings(env: Mapping[str, str]) -> AlertSettings:

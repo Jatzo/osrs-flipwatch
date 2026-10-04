@@ -148,18 +148,6 @@ def test_invalid_options_are_rejected(fake_client: FakeClient, args: list[str]) 
     assert exit_info.value.code == 2
 
 
-def test_missing_user_agent_exits_with_error(
-    fake_client: FakeClient,
-    capsys: pytest.CaptureFixture[str],
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.delenv("FLIPWATCH_USER_AGENT")
-
-    assert run(fake_client) == 1
-
-    assert "FLIPWATCH_USER_AGENT" in capsys.readouterr().err
-
-
 def test_api_error_exits_with_error(capsys: pytest.CaptureFixture[str]) -> None:
     failing = FakeClient([], {}, {}, error=ApiError("/mapping returned HTTP 503"))
 
@@ -381,3 +369,25 @@ class TestBacktest:
             run_command(fake_client, "backtest", *args)
 
         assert exit_info.value.code == 2
+
+
+class TestWithoutUserAgent:
+    @pytest.fixture(autouse=True)
+    def no_user_agent(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("FLIPWATCH_USER_AGENT")
+
+    @pytest.mark.parametrize("command", [["scan"], ["collect", "--once"], ["seed", "4151"]])
+    def test_commands_that_call_the_api_refuse(
+        self, fake_client: FakeClient, capsys: pytest.CaptureFixture[str], command: list[str]
+    ) -> None:
+        assert run_command(fake_client, *command) == 1
+
+        assert "FLIPWATCH_USER_AGENT is not set" in capsys.readouterr().err
+
+    def test_status_and_backtest_work_offline(
+        self, fake_client: FakeClient, capsys: pytest.CaptureFixture[str], market_db: Path
+    ) -> None:
+        assert run_command(fake_client, "status") == 0
+        assert run_command(fake_client, "backtest", "--days", "1") == 0
+
+        assert "Backtest 1: margin strategy" in capsys.readouterr().out

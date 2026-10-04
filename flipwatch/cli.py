@@ -13,7 +13,7 @@ from flipwatch import collector
 from flipwatch.api import TIMESTEP_SECONDS, ApiError, PricesClient
 from flipwatch.backtest import BacktestResult, BacktestSettings
 from flipwatch.coins import parse_coins
-from flipwatch.config import ConfigError, Settings, load_settings
+from flipwatch.config import ConfigError, Settings, load_settings, require_user_agent
 from flipwatch.models import Opportunity
 from flipwatch.runner import STRATEGIES, BacktestRequest, BacktestRequestError, run_and_save
 from flipwatch.scanner import NoLimitPolicy, ScanSettings, SortKey, rank, scan
@@ -243,7 +243,7 @@ def run_scan(args: argparse.Namespace, runtime: Runtime) -> int:
         members=args.members,
         no_limit_policy=args.no_limit_policy,
     )
-    with runtime.client_factory(runtime.settings) as client:
+    with _open_client(runtime) as client:
         found = scan(
             client.mapping(), client.latest(), client.one_hour(), settings, runtime.clock()
         )
@@ -264,7 +264,7 @@ def run_scan(args: argparse.Namespace, runtime: Runtime) -> int:
 def run_collect(args: argparse.Namespace, runtime: Runtime) -> int:
     _configure_logging()
     settings = runtime.settings
-    with runtime.client_factory(settings) as client, Store.open(settings.db_path) as store:
+    with _open_client(runtime) as client, Store.open(settings.db_path) as store:
         if args.once:
             now = runtime.clock()
             collector.collect_once(client, store, now)
@@ -281,7 +281,7 @@ def run_collect(args: argparse.Namespace, runtime: Runtime) -> int:
 def run_seed(args: argparse.Namespace, runtime: Runtime) -> int:
     _configure_logging()
     settings = runtime.settings
-    with runtime.client_factory(settings) as client, Store.open(settings.db_path) as store:
+    with _open_client(runtime) as client, Store.open(settings.db_path) as store:
         try:
             added = collector.seed(client, store, args.item_ids, args.timestep)
         except ValueError as exc:
@@ -403,6 +403,11 @@ def format_backtest(result: BacktestResult, run_id: int) -> str:
         "conservative fill model, not a promise of future profit.",
     ]
     return "\n".join(lines)
+
+
+def _open_client(runtime: Runtime) -> PricesClient:
+    require_user_agent(runtime.settings)
+    return runtime.client_factory(runtime.settings)
 
 
 def _configure_logging() -> None:

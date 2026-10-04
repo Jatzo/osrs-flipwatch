@@ -8,6 +8,7 @@ from flipwatch.config import (
     AlertSettings,
     ConfigError,
     load_settings,
+    require_user_agent,
 )
 
 USER_AGENT = "osrs-flipwatch (github.com/example/osrs-flipwatch)"
@@ -24,11 +25,18 @@ def test_loads_user_agent_and_defaults() -> None:
 
 
 @pytest.mark.parametrize("value", [None, "", "   "])
-def test_missing_or_blank_user_agent_is_rejected(value: str | None) -> None:
+def test_missing_user_agent_loads_but_is_refused_where_needed(value: str | None) -> None:
     env = {} if value is None else {"FLIPWATCH_USER_AGENT": value}
 
+    settings = load_settings(env)
+
+    assert settings.user_agent == ""
     with pytest.raises(ConfigError, match="FLIPWATCH_USER_AGENT"):
-        load_settings(env)
+        require_user_agent(settings)
+
+
+def test_user_agent_present_passes_the_check() -> None:
+    require_user_agent(load_settings({"FLIPWATCH_USER_AGENT": USER_AGENT}))
 
 
 def test_user_agent_is_trimmed() -> None:
