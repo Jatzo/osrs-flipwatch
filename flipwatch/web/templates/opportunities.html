@@ -22,8 +22,10 @@
       <option value="volume" {% if form.values.no_limit == "volume" %}selected{% endif %}>Cap by volume</option>
     </select>
   </label>
-  <button type="submit">Apply</button>
-  <a class="button-link" href="{{ url_for('dashboard.opportunities') }}">Reset</a>
+  <div class="form-actions">
+    <button type="submit">Apply</button>
+    <a class="button-link" href="{{ url_for('dashboard.opportunities') }}">Reset</a>
+  </div>
 </form>
 
 {% for message in form.errors %}<p class="notice">{{ message }}</p>{% endfor %}
