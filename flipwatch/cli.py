@@ -193,7 +193,9 @@ def _add_backtest_command(commands: argparse._SubParsersAction) -> None:
     )
     period.add_argument("--start", type=_parse_date, help="first day to test, YYYY-MM-DD in UTC")
     backtest_parser.add_argument(
-        "--end", type=_parse_date, help="day to stop before, YYYY-MM-DD in UTC (default now)"
+        "--end",
+        type=_parse_date,
+        help="day to stop before, YYYY-MM-DD in UTC (default: end of stored data)",
     )
     universe = backtest_parser.add_mutually_exclusive_group()
     universe.add_argument(
