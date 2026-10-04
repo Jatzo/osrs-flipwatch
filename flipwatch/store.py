@@ -9,7 +9,7 @@ from typing import Self
 
 from flipwatch.api import TIMESTEP_SECONDS, check_timestep
 from flipwatch.backtest import BacktestResult, result_from_dict
-from flipwatch.models import Item, PriceWindow
+from flipwatch.models import Alert, Item, Opportunity, PriceWindow
 
 _SCHEMA_V1 = """
 CREATE TABLE items (
@@ -69,7 +69,30 @@ CREATE TABLE watchlist (
 );
 """
 
-_MIGRATIONS = [_SCHEMA_V1, _SCHEMA_V2, _SCHEMA_V3]
+_SCHEMA_V4 = """
+CREATE TABLE alerts (
+    id INTEGER PRIMARY KEY,
+    item_id INTEGER NOT NULL,
+    item_name TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    buy_price INTEGER NOT NULL,
+    sell_price INTEGER NOT NULL,
+    margin INTEGER NOT NULL,
+    roi REAL NOT NULL,
+    potential_profit INTEGER NOT NULL,
+    confidence INTEGER NOT NULL,
+    read INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE INDEX alerts_by_item ON alerts (item_id, created_at);
+"""
+
+_MIGRATIONS = [_SCHEMA_V1, _SCHEMA_V2, _SCHEMA_V3, _SCHEMA_V4]
+
+_ALERT_COLUMNS = (
+    "id, item_id, item_name, created_at, buy_price, sell_price, "
+    "margin, roi, potential_profit, confidence, read"
+)
 SCHEMA_VERSION = len(_MIGRATIONS)
 
 
@@ -344,6 +367,65 @@ class Store:
             cursor = self._conn.execute("DELETE FROM watchlist WHERE item_id = ?", (item_id,))
         return cursor.rowcount == 1
 
+    def save_alert(
+        self, opportunity: Opportunity, created_at: int, cooldown_seconds: int
+    ) -> Alert | None:
+        """Record an alert unless the item already had one within the cooldown.
+
+        The check and the insert are one statement, so two dashboard tabs checking at
+        the same moment cannot both record the same item.
+        """
+        o = opportunity
+        with self._conn:
+            cursor = self._conn.execute(
+                """
+                INSERT INTO alerts (
+                    item_id, item_name, created_at, buy_price, sell_price,
+                    margin, roi, potential_profit, confidence
+                )
+                SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?
+                WHERE NOT EXISTS (
+                    SELECT 1 FROM alerts WHERE item_id = ? AND created_at > ?
+                )
+                """,
+                (
+                    o.item.id,
+                    o.item.name,
+                    created_at,
+                    o.buy_price,
+                    o.sell_price,
+                    o.margin,
+                    o.roi,
+                    o.potential_profit,
+                    o.confidence.score,
+                    o.item.id,
+                    created_at - cooldown_seconds,
+                ),
+            )
+        if cursor.rowcount == 0 or cursor.lastrowid is None:
+            return None
+        return self._alerts("WHERE id = ?", (cursor.lastrowid,))[0]
+
+    def alerts(self, limit: int = 200) -> list[Alert]:
+        """Return recent alerts, newest first."""
+        return self._alerts("ORDER BY id DESC LIMIT ?", (limit,))
+
+    def alerts_after(self, alert_id: int) -> list[Alert]:
+        """Return alerts raised after `alert_id`, oldest first."""
+        return self._alerts("WHERE id > ? ORDER BY id", (alert_id,))
+
+    def latest_alert_id(self) -> int:
+        (latest,) = self._conn.execute("SELECT COALESCE(MAX(id), 0) FROM alerts").fetchone()
+        return latest
+
+    def unread_alert_count(self) -> int:
+        (count,) = self._conn.execute("SELECT COUNT(*) FROM alerts WHERE read = 0").fetchone()
+        return count
+
+    def mark_alerts_read(self) -> int:
+        with self._conn:
+            return self._conn.execute("UPDATE alerts SET read = 1 WHERE read = 0").rowcount
+
     def summary(self, timestep: str) -> StoreSummary:
         check_timestep(timestep)
         count, first, last = self._conn.execute(
@@ -381,6 +463,25 @@ class Store:
                     "DELETE FROM collected_windows WHERE timestep = ? AND timestamp < ?", params
                 )
         return removed
+
+    def _alerts(self, clause: str, params: tuple[object, ...]) -> list[Alert]:
+        cursor = self._conn.execute(f"SELECT {_ALERT_COLUMNS} FROM alerts {clause}", params)
+        return [
+            Alert(
+                id=row[0],
+                item_id=row[1],
+                item_name=row[2],
+                created_at=row[3],
+                buy_price=row[4],
+                sell_price=row[5],
+                margin=row[6],
+                roi=row[7],
+                potential_profit=row[8],
+                confidence=row[9],
+                read=bool(row[10]),
+            )
+            for row in cursor
+        ]
 
     def _insert_windows(self, timestep: str, windows: Iterable[PriceWindow]) -> int:
         rows = [

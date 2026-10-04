@@ -123,3 +123,20 @@ class Opportunity:
     def tradeable_volume(self) -> int:
         """The thinner side of the market, which limits how much can be flipped."""
         return min(self.low_volume, self.high_volume)
+
+
+@dataclass(frozen=True)
+class Alert:
+    """A flip that met the alert rules, with its numbers at the moment it was raised."""
+
+    id: int
+    item_id: int
+    item_name: str
+    created_at: int
+    buy_price: int
+    sell_price: int
+    margin: int
+    roi: float
+    potential_profit: int
+    confidence: int
+    read: bool

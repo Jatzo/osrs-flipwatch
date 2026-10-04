@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from flipwatch.backtest import BacktestResult, BacktestSettings, ItemResult
-from flipwatch.models import Item, PriceWindow
+from flipwatch.models import Confidence, Item, Opportunity, PriceWindow
 from flipwatch.store import _SCHEMA_V1, SCHEMA_VERSION, BacktestRunSummary, Store, StoreError
 
 T0 = 1_791_066_000
@@ -58,7 +58,14 @@ def test_new_database_gets_the_schema(store: Store, db_path: Path) -> None:
         (journal_mode,) = conn.execute("PRAGMA journal_mode").fetchone()
 
     assert version == SCHEMA_VERSION
-    assert {"items", "price_windows", "collected_windows", "backtest_runs", "watchlist"} <= tables
+    assert {
+        "items",
+        "price_windows",
+        "collected_windows",
+        "backtest_runs",
+        "watchlist",
+        "alerts",
+    } <= tables
     assert journal_mode == "wal"
 
 
@@ -193,7 +200,7 @@ def test_version_1_database_is_upgraded_in_place(db_path: Path) -> None:
 
     with sqlite3.connect(db_path) as conn:
         (version,) = conn.execute("PRAGMA user_version").fetchone()
-    assert version == SCHEMA_VERSION == 3
+    assert version == SCHEMA_VERSION == 4
 
 
 def test_windows_between(store: Store) -> None:
@@ -280,3 +287,63 @@ def test_watchlist(store: Store) -> None:
     assert store.unwatch(4151)
     assert not store.unwatch(4151)
     assert store.watchlist() == [560]
+
+
+def make_opportunity(item_id: int = 4151, margin: int = 9_000) -> Opportunity:
+    return Opportunity(
+        item=make_item(item_id),
+        buy_price=800_000,
+        sell_price=825_000,
+        tax=16_000,
+        margin=margin,
+        roi=margin / 800_000,
+        low_volume=100,
+        high_volume=120,
+        quantity=10,
+        potential_profit=margin * 10,
+        confidence=Confidence(score=72, liquidity=0.9, stability=0.8),
+    )
+
+
+def test_alert_is_saved_with_its_numbers(store: Store) -> None:
+    alert = store.save_alert(make_opportunity(), created_at=T0, cooldown_seconds=3_600)
+
+    assert alert is not None
+    assert (alert.item_id, alert.item_name, alert.created_at) == (4151, "Abyssal whip", T0)
+    assert (alert.margin, alert.potential_profit, alert.confidence) == (9_000, 90_000, 72)
+    assert alert.read is False
+    assert store.alerts() == [alert]
+
+
+def test_alert_cooldown_is_per_item_and_ends_after_the_period(store: Store) -> None:
+    assert store.save_alert(make_opportunity(), T0, cooldown_seconds=3_600)
+    assert store.save_alert(make_opportunity(), T0 + 3_599, cooldown_seconds=3_600) is None
+    assert store.save_alert(make_opportunity(560), T0 + 60, cooldown_seconds=3_600)
+    assert store.save_alert(make_opportunity(), T0 + 3_600, cooldown_seconds=3_600)
+
+    assert [(a.item_id, a.created_at) for a in store.alerts()] == [
+        (4151, T0 + 3_600),
+        (560, T0 + 60),
+        (4151, T0),
+    ]
+
+
+def test_alerts_after_and_read_state(store: Store) -> None:
+    assert store.latest_alert_id() == 0
+    first = store.save_alert(make_opportunity(1), T0, 3_600)
+    second = store.save_alert(make_opportunity(2), T0, 3_600)
+    assert first is not None and second is not None
+
+    assert store.alerts_after(first.id) == [second]
+    assert store.latest_alert_id() == second.id
+    assert store.unread_alert_count() == 2
+    assert store.mark_alerts_read() == 2
+    assert store.unread_alert_count() == 0
+    assert all(alert.read for alert in store.alerts())
+
+
+def test_alerts_are_limited_newest_first(store: Store) -> None:
+    for item_id in range(5):
+        store.save_alert(make_opportunity(item_id), T0, 3_600)
+
+    assert [a.item_id for a in store.alerts(limit=2)] == [4, 3]
