@@ -71,6 +71,17 @@ Large margins on tiny volume are often traps, so each flip has a confidence scor
 
 Run `flipwatch scan --help` for every option.
 
+## Planning your slots
+
+```
+flipwatch plan
+flipwatch plan --capital 20m --slots 3 --f2p
+```
+
+A single flip rarely makes much on its own. What matters is what all your offer slots make together, so the plan fills each slot in turn with the flip that adds the most profit for the cash you have left. When the cash cannot cover an item's full quantity it buys fewer rather than skipping it, and each item takes one slot at most. Flips with a confidence below 40 are left out, and the 500,000 coin profit floor does not apply, since a smaller flip can still be the best use of a spare slot.
+
+It shows each flip, the cash used and left over, and the profit for one round. Buy limits reset every four hours, so it also gives a rough hourly figure that assumes every offer fills within that time. The dashboard has the same plan on its Plan page.
+
 ## Collecting price history
 
 Backtests need history, so the collector stores the five minute averages for every traded item in a local SQLite database.
@@ -125,7 +136,7 @@ A backtest is an estimate, not a promise. Averages hide the spread of prices ins
 flask --app flipwatch.web run
 ```
 
-Then open http://127.0.0.1:5000. The dashboard has five pages. Opportunities shows the scan as a table you can filter and sort by clicking any column. Each item has its own page with a chart of average high and low prices, volume underneath, the current margin numbers and, when it is not listed as a flip, the filter it failed. The watchlist keeps items you want to follow, with their numbers whether or not they currently pass the filters. Backtests lists saved runs with their equity curve and per item results, and has a form to start a new run. Alerts is described below.
+Then open http://127.0.0.1:5000. The dashboard has six pages. Opportunities shows the scan as a table you can filter and sort by clicking any column. Each item has its own page with a chart of average high and low prices, volume underneath, the current margin numbers and, when it is not listed as a flip, the filter it failed. Plan fills your offer slots as described above. The watchlist keeps items you want to follow, with their numbers whether or not they currently pass the filters. Backtests lists saved runs with their equity curve and per item results, and has a form to start a new run. Alerts is described below.
 
 Charts use your stored history when it covers the chosen range, and otherwise make a single timeseries request to the wiki for that item, cached for five minutes. The dashboard is meant to run on your own machine. It has no login, so do not expose it to a network you do not trust. Its forms refuse submissions from other websites, so a page you visit cannot change your watchlist or start a backtest through your browser.
 
