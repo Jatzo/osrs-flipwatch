@@ -111,7 +111,7 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
         raise ConfigError(
             "FLIPWATCH_USER_AGENT is not set. The OSRS Wiki blocks generic user agents, "
             "so set it to something that names the project and gives a contact, for example "
-            "'osrs-flipwatch (github.com/USERNAME/osrs-flipwatch)'."
+            "'osrs-flipwatch (github.com/USERNAME/OSRS-Flipping-Tool)'."
         )
 
     return Settings(
