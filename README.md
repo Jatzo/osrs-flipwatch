@@ -1,6 +1,6 @@
 # OSRS Flipwatch
 
-Finds profitable Grand Exchange flips in Old School RuneScape, backtests flipping strategies against historic prices and sends Discord alerts when a good margin opens up.
+Finds profitable Grand Exchange flips in Old School RuneScape, backtests flipping strategies against historic prices and alerts you in a dashboard when a good margin opens up.
 
 This project is in early development.
 
@@ -93,11 +93,17 @@ Then open http://127.0.0.1:5000. The dashboard has four pages. Opportunities sho
 
 Charts use your stored history when it covers the chosen range, and otherwise make a single timeseries request to the wiki for that item, cached for five minutes. The dashboard is meant to run on your own machine. It has no login, so do not expose it to a network you do not trust.
 
+## Alerts
+
+While any dashboard page is open, it checks for new flips once a minute. When a flip meets the alert rules, the Alerts link in the header shows an unread count and a banner appears on whichever page you are on. On the Alerts page you can also turn on desktop notifications, so alerts reach you while the tab is in the background.
+
+An alert needs a margin of at least 10 coins, 1% ROI, 500,000 coins of potential profit, 50 trades an hour on the thinner side and a confidence of 40, all configurable. You can also limit alerts to items on your watchlist. Each item alerts at most once an hour, and the Alerts page lists every alert beside the item's current numbers, so you can see whether the margin still holds. Alerts are only raised while a dashboard tab is open.
+
 ## Configuration
 
 Settings come from environment variables or a `.env` file. See `.env.example` for the full list.
 
-`FLIPWATCH_USER_AGENT` is required and should name the project and give a contact. `FLIPWATCH_DB_PATH` sets where the database lives (default `flipwatch.sqlite3`) and `FLIPWATCH_RETENTION_DAYS` sets how long price data is kept (default 90).
+`FLIPWATCH_USER_AGENT` is required and should name the project and give a contact. `FLIPWATCH_DB_PATH` sets where the database lives (default `flipwatch.sqlite3`) and `FLIPWATCH_RETENTION_DAYS` sets how long price data is kept (default 90). The `FLIPWATCH_ALERT_` variables set the alert rules and cooldown.
 
 ## Data source
 
