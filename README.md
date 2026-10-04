@@ -2,7 +2,7 @@
 
 Finds profitable Grand Exchange flips in Old School RuneScape, backtests flipping strategies against historic prices and alerts you in a dashboard when a good margin opens up.
 
-<!-- Screenshot: save a dashboard screenshot as docs/dashboard.png and replace this comment with ![The opportunities page](docs/dashboard.png) -->
+![The opportunities page, listing flips with their margin, volume, potential profit and confidence](docs/dashboard.png)
 
 ## What it does
 
