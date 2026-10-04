@@ -8,7 +8,7 @@ from werkzeug.wrappers import Response
 from flipwatch.alerts import check_for_alerts, current_status
 from flipwatch.api import ApiError
 from flipwatch.config import EXCLUDED_ITEM_IDS
-from flipwatch.models import Alert
+from flipwatch.models import Alert, Item, LatestPrice, Opportunity, PriceWindow
 from flipwatch.runner import STRATEGIES, BacktestRequestError, run_and_save
 from flipwatch.scanner import ScanSettings, assess, margin_at, rank, scan
 from flipwatch.web import forms, market
@@ -164,25 +164,23 @@ def backtest(run_id: int) -> Page:
 def alerts() -> Page:
     app = dashboard()
     history = store().alerts()
-    rows: list[dict[str, Any]] = [{"alert": alert} for alert in history]
+    rules = app.settings.alerts
+
+    def judge(
+        item: Item, price: LatestPrice | None, window: PriceWindow | None, now: float
+    ) -> tuple[Opportunity | None, str | None]:
+        return current_status(item, price, window, rules, now)
+
+    statuses: dict[int, market.ItemStatus] = {}
     api_error = None
     try:
-        items, latest, hourly = app.client.mapping(), app.client.latest(), app.client.one_hour()
+        statuses = market.item_statuses(
+            app.client, (a.item_id for a in history), judge, app.clock()
+        )
     except ApiError as exc:
         api_error = str(exc)
-    else:
-        now = app.clock()
-        for row in rows:
-            item_id = row["alert"].item_id
-            found = items.get(item_id)
-            if found is None:
-                continue
-            price = latest.get(item_id)
-            opportunity, reason = current_status(
-                found, price, hourly.get(item_id), app.settings.alerts, now
-            )
-            row.update(summary=margin_at(found, price), opportunity=opportunity, reason=reason)
-    return render_template("alerts.html", rows=rows, rules=app.settings.alerts, api_error=api_error)
+    rows = [{"alert": alert, "status": statuses.get(alert.item_id)} for alert in history]
+    return render_template("alerts.html", rows=rows, rules=rules, api_error=api_error)
 
 
 @bp.post("/alerts/read")
@@ -220,35 +218,24 @@ def _render_watchlist(
     error: str | None = None, api_error: str | None = None, status: int = 200
 ) -> Page:
     app = dashboard()
-    ids = store().watchlist()
-    rows = []
+    rows: list[market.ItemStatus] = []
     if api_error is None:
         try:
-            items, latest, hourly = (
-                app.client.mapping(),
-                app.client.latest(),
-                app.client.one_hour(),
+            statuses = market.item_statuses(
+                app.client, store().watchlist(), _judge_by_scan_defaults, app.clock()
             )
         except ApiError as exc:
             api_error = str(exc)
         else:
-            now = app.clock()
-            for item_id in ids:
-                found = items.get(item_id)
-                if found is None:
-                    continue
-                price = latest.get(item_id)
-                opportunity, reason = assess(found, price, hourly.get(item_id), ScanSettings(), now)
-                rows.append(
-                    {
-                        "item": found,
-                        "summary": margin_at(found, price),
-                        "opportunity": opportunity,
-                        "reason": reason,
-                    }
-                )
+            rows = list(statuses.values())
     page = render_template("watchlist.html", rows=rows, error=error, api_error=api_error)
     return page, 502 if api_error else status
+
+
+def _judge_by_scan_defaults(
+    item: Item, price: LatestPrice | None, window: PriceWindow | None, now: float
+) -> tuple[Opportunity | None, str | None]:
+    return assess(item, price, window, ScanSettings(), now)
 
 
 def _watch(item_id: int, default_next: str) -> Page:

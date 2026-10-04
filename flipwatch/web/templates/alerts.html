@@ -38,7 +38,7 @@
     </thead>
     <tbody>
       {% for row in rows %}
-      {% set a = row.alert %}{% set s = row.summary %}
+      {% set a = row.alert %}{% set st = row.status %}{% set s = st.summary if st else none %}
       <tr {% if not a.read %}class="unread"{% endif %}>
         <td data-value="{{ a.created_at }}">{{ a.created_at | utc_time }}</td>
         <td><a href="{{ url_for('dashboard.item', item_id=a.item_id) }}">{{ a.item_name }}</a></td>
@@ -47,8 +47,8 @@
         <td data-value="{{ a.potential_profit }}">{{ a.potential_profit | coins }}</td>
         <td data-value="{{ a.confidence }}">{{ a.confidence }}</td>
         <td>
-          {% if row.opportunity %}<span class="tag good">still a flip</span>
-          {% elif row.reason %}{{ row.reason }}
+          {% if st and st.opportunity %}<span class="tag good">still a flip</span>
+          {% elif st and st.reason %}{{ st.reason }}
           {% else %}-{% endif %}
         </td>
       </tr>

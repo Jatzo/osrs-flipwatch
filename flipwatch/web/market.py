@@ -1,18 +1,34 @@
 """Gather market data for dashboard pages: item search, prices and chart history."""
 
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
 from flipwatch.api import TIMESTEP_SECONDS, ApiError, PricesClient
-from flipwatch.models import Item, PriceWindow
+from flipwatch.models import Item, LatestPrice, Opportunity, PriceWindow
+from flipwatch.scanner import Margin, margin_at
 from flipwatch.store import Store
 
 CHART_RANGES = {"6h": 6 * 3600, "24h": 24 * 3600, "7d": 7 * 24 * 3600}
 MAX_SEARCH_RESULTS = 50
 # Stored history may start this share of the range late and still be used for the chart.
 COVERAGE_SLACK = 0.1
+
+
+Judge = Callable[
+    [Item, LatestPrice | None, PriceWindow | None, float], tuple[Opportunity | None, str | None]
+]
+
+
+@dataclass(frozen=True)
+class ItemStatus:
+    """An item's current margin and whether it passes the rules it is judged by."""
+
+    item: Item
+    summary: Margin | None
+    opportunity: Opportunity | None
+    reason: str | None
 
 
 @dataclass(frozen=True)
@@ -36,6 +52,22 @@ def find_items(items: Mapping[int, Item], query: str) -> list[Item]:
         return exact
     partial = [item for item in items.values() if lowered in item.name.lower()]
     return sorted(partial, key=lambda item: (len(item.name), item.name))[:MAX_SEARCH_RESULTS]
+
+
+def item_statuses(
+    client: PricesClient, item_ids: Iterable[int], judge: Judge, now: float
+) -> dict[int, ItemStatus]:
+    """Load the market once and judge each item. Ids missing from the mapping are skipped."""
+    items, latest, hourly = client.mapping(), client.latest(), client.one_hour()
+    statuses = {}
+    for item_id in dict.fromkeys(item_ids):
+        item = items.get(item_id)
+        if item is None:
+            continue
+        price = latest.get(item_id)
+        opportunity, reason = judge(item, price, hourly.get(item_id), now)
+        statuses[item_id] = ItemStatus(item, margin_at(item, price), opportunity, reason)
+    return statuses
 
 
 def item_history(
