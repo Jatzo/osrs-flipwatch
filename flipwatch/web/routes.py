@@ -1,10 +1,14 @@
 """Dashboard pages."""
 
-from flask import Blueprint, abort, redirect, render_template, request, url_for
+from typing import Any
+
+from flask import Blueprint, abort, jsonify, redirect, render_template, request, url_for
 from werkzeug.wrappers import Response
 
+from flipwatch.alerts import check_for_alerts, current_status
 from flipwatch.api import ApiError
 from flipwatch.config import EXCLUDED_ITEM_IDS
+from flipwatch.models import Alert
 from flipwatch.runner import STRATEGIES, BacktestRequestError, run_and_save
 from flipwatch.scanner import ScanSettings, assess, rank, scan
 from flipwatch.web import forms, market
@@ -14,7 +18,16 @@ bp = Blueprint("dashboard", __name__)
 
 MAX_OPPORTUNITY_ROWS = 200
 
-Page = str | tuple[str, int] | Response
+Page = str | Response | tuple[str | Response, int]
+
+
+@bp.app_context_processor
+def alert_status() -> dict[str, int]:
+    """The unread count for the header badge, and where the alert check should resume."""
+    return {
+        "unread_alerts": store().unread_alert_count(),
+        "latest_alert_id": store().latest_alert_id(),
+    }
 
 
 @bp.get("/")
@@ -147,6 +160,59 @@ def backtest(run_id: int) -> Page:
     )
 
 
+@bp.get("/alerts")
+def alerts() -> Page:
+    app = dashboard()
+    history = store().alerts()
+    rows: list[dict[str, Any]] = [{"alert": alert} for alert in history]
+    api_error = None
+    try:
+        items, latest, hourly = app.client.mapping(), app.client.latest(), app.client.one_hour()
+    except ApiError as exc:
+        api_error = str(exc)
+    else:
+        now = app.clock()
+        for row in rows:
+            item_id = row["alert"].item_id
+            found = items.get(item_id)
+            if found is None:
+                continue
+            price = latest.get(item_id)
+            opportunity, reason = current_status(
+                found, price, hourly.get(item_id), app.settings.alerts, now
+            )
+            row.update(
+                summary=market.price_summary(found, price), opportunity=opportunity, reason=reason
+            )
+    return render_template("alerts.html", rows=rows, rules=app.settings.alerts, api_error=api_error)
+
+
+@bp.post("/alerts/read")
+def mark_alerts_read() -> Page:
+    store().mark_alerts_read()
+    return redirect(url_for("dashboard.alerts"))
+
+
+@bp.post("/alerts/check")
+def check_alerts() -> Page:
+    """Raise any new alerts, then return every alert after the one the page last saw."""
+    app = dashboard()
+    since = request.args.get("since", type=int, default=0)
+    error = None
+    try:
+        check_for_alerts(app.client, store(), app.settings.alerts, app.clock())
+    except ApiError as exc:
+        error = str(exc)
+    new = store().alerts_after(since)
+    body = {
+        "alerts": [_alert_json(alert) for alert in new],
+        "unread": store().unread_alert_count(),
+        "latestId": new[-1].id if new else since,
+        "error": error,
+    }
+    return jsonify(body), 502 if error else 200
+
+
 @bp.app_errorhandler(404)
 def not_found(_: Exception) -> Page:
     return render_template("error.html", message="There is nothing at this address."), 404
@@ -199,6 +265,17 @@ def _render_backtests(form: forms.Form, status: int = 200) -> Page:
         "backtests.html", runs=store().backtest_runs(), form=form, strategies=list(STRATEGIES)
     )
     return page, status
+
+
+def _alert_json(alert: Alert) -> dict[str, Any]:
+    return {
+        "id": alert.id,
+        "itemName": alert.item_name,
+        "margin": alert.margin,
+        "potentialProfit": alert.potential_profit,
+        "confidence": alert.confidence,
+        "url": url_for("dashboard.item", item_id=alert.item_id),
+    }
 
 
 def _safe_next(default: str) -> str:

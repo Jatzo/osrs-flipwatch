@@ -7,7 +7,7 @@ from flask.testing import FlaskClient
 from werkzeug.test import TestResponse
 
 from flipwatch.api import ApiError
-from flipwatch.config import Settings
+from flipwatch.config import AlertSettings, Settings
 from flipwatch.models import Item, PriceWindow
 from flipwatch.store import Store
 from flipwatch.web import create_app
@@ -26,7 +26,12 @@ def db_path(tmp_path: Path) -> Path:
 
 @pytest.fixture
 def app(fake_client: FakeClient, db_path: Path) -> Flask:
-    settings = Settings(user_agent="osrs-flipwatch-tests (example.test)", db_path=str(db_path))
+    settings = Settings(
+        user_agent="osrs-flipwatch-tests (example.test)",
+        db_path=str(db_path),
+        # No ROI or confidence floor, so both fixture flips can raise alerts.
+        alerts=AlertSettings(min_roi=0, min_confidence=0),
+    )
     return create_app(settings, client_factory=lambda _: fake_client, clock=lambda: NOW)
 
 
@@ -341,3 +346,96 @@ class TestMarketHelpers:
 
     def test_price_summary_needs_both_sides(self, items: dict[int, Item]) -> None:
         assert price_summary(items[1], None) is None
+
+
+class TestAlerts:
+    def check(self, client: FlaskClient, since: int = 0) -> TestResponse:
+        return client.post(f"/alerts/check?since={since}")
+
+    def test_badge_is_hidden_without_alerts(self, client: FlaskClient) -> None:
+        page = text(client.get("/watchlist"))
+
+        assert 'id="alert-count" class="badge" hidden' in page
+        assert 'data-latest-alert="0"' in page
+
+    def test_check_raises_alerts_and_returns_them_once(self, client: FlaskClient) -> None:
+        first = self.check(client).get_json()
+
+        assert [a["itemName"] for a in first["alerts"]] == ["Tormented synapse", "Noxious halberd"]
+        assert first["alerts"][1] == {
+            "id": 2,
+            "itemName": "Noxious halberd",
+            "margin": 158_046,
+            "potentialProfit": 790_230,
+            "confidence": 59,
+            "url": "/item/29796",
+        }
+        assert (first["unread"], first["latestId"], first["error"]) == (2, 2, None)
+
+        second = self.check(client, since=first["latestId"]).get_json()
+        assert (second["alerts"], second["unread"], second["latestId"]) == ([], 2, 2)
+
+    def test_another_tab_still_hears_about_alerts(self, client: FlaskClient) -> None:
+        self.check(client)
+
+        other_tab = self.check(client, since=0).get_json()
+
+        assert len(other_tab["alerts"]) == 2
+
+    def test_badge_shows_unread_count(self, client: FlaskClient) -> None:
+        self.check(client)
+
+        page = text(client.get("/"))
+
+        assert 'id="alert-count" class="badge" >' in page
+        assert "<span data-count>2</span>" in page
+        assert 'data-latest-alert="2"' in page
+
+    def test_alerts_page_and_mark_as_read(self, client: FlaskClient) -> None:
+        self.check(client)
+
+        page = text(client.get("/alerts"))
+        assert page.count('class="unread"') == 2
+        assert page.count('class="tag good">still a flip') == 2
+        assert "158,046" in page
+        assert "Mark all as read" in page
+
+        response = client.post("/alerts/read")
+        assert response.headers["Location"] == "/alerts"
+
+        page = text(client.get("/alerts"))
+        assert 'class="unread"' not in page
+        assert "Mark all as read" not in page
+
+    def test_alerts_page_describes_the_rules(self, client: FlaskClient) -> None:
+        page = text(client.get("/alerts"))
+
+        assert "No alerts yet." in page
+        assert "Each item alerts at most once every 60 minutes." in page
+
+    def test_api_failure_during_check(self, client: FlaskClient, fake_client: FakeClient) -> None:
+        fake_client._error = ApiError("/mapping returned HTTP 503")
+
+        response = self.check(client)
+
+        assert response.status_code == 502
+        assert response.get_json() == {
+            "alerts": [],
+            "unread": 0,
+            "latestId": 0,
+            "error": "/mapping returned HTTP 503",
+        }
+
+    def test_history_shows_when_prices_cannot_load(
+        self, client: FlaskClient, fake_client: FakeClient
+    ) -> None:
+        self.check(client)
+        fake_client._error = ApiError("/mapping returned HTTP 503")
+
+        page = text(client.get("/alerts"))
+
+        assert "Current prices could not be loaded" in page
+        assert "Noxious halberd" in page
+
+    def test_check_needs_a_post(self, client: FlaskClient) -> None:
+        assert client.get("/alerts/check").status_code == 405

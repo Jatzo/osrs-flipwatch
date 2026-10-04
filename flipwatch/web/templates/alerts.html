@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Alerts{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>Alerts</h1>
+  <div class="actions">
+    <button id="enable-notifications" type="button" hidden>Turn on desktop notifications</button>
+    {% if unread_alerts %}
+    <form method="post" action="{{ url_for('dashboard.mark_alerts_read') }}">
+      <button type="submit">Mark all as read</button>
+    </form>
+    {% endif %}
+  </div>
+</div>
+<p class="meta">
+  While a dashboard page is open it checks for new flips every minute. An alert needs a margin
+  of at least {{ rules.min_margin | coins }} gp, {{ rules.min_roi | percent }} ROI,
+  {{ rules.min_profit | coins }} gp potential profit, {{ rules.min_volume | coins }} trades an hour
+  and confidence of {{ rules.min_confidence }} or more{% if rules.watchlist_only %}, and the item must be on the watchlist{% endif %}.
+  Each item alerts at most once every {{ rules.cooldown_minutes }} minutes.
+</p>
+
+{% if api_error %}
+  <p class="notice error">Current prices could not be loaded from the OSRS Wiki: {{ api_error }}. The history below is still accurate.</p>
+{% endif %}
+
+{% if not rows %}
+  <p class="empty">No alerts yet. They will appear here, and as a banner on any page, when a flip meets the rules.</p>
+{% else %}
+  <div class="table-wrap">
+  <table class="sortable">
+    <thead>
+      <tr>
+        <th aria-sort="descending">Raised</th><th data-type="text">Item</th>
+        <th>Margin then</th><th>Margin now</th><th>Profit then</th><th>Confidence then</th>
+        <th data-type="text">Now</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in rows %}
+      {% set a = row.alert %}{% set s = row.summary %}
+      <tr {% if not a.read %}class="unread"{% endif %}>
+        <td data-value="{{ a.created_at }}">{{ a.created_at | utc_time }}</td>
+        <td><a href="{{ url_for('dashboard.item', item_id=a.item_id) }}">{{ a.item_name }}</a></td>
+        <td data-value="{{ a.margin }}">{{ a.margin | coins }}</td>
+        <td data-value="{{ s.margin if s else 0 }}">{{ s.margin | coins if s else "-" }}</td>
+        <td data-value="{{ a.potential_profit }}">{{ a.potential_profit | coins }}</td>
+        <td data-value="{{ a.confidence }}">{{ a.confidence }}</td>
+        <td>
+          {% if row.opportunity %}<span class="tag good">still a flip</span>
+          {% elif row.reason %}{{ row.reason }}
+          {% else %}-{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+{% endif %}
+{% endblock %}

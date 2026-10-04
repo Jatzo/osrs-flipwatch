@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from flipwatch.alerts import check_for_alerts, scan_settings, select_alerts
+from flipwatch.alerts import check_for_alerts, current_status, scan_settings, select_alerts
 from flipwatch.api import ApiError
 from flipwatch.config import AlertSettings
 from flipwatch.models import Confidence, Item, Opportunity
@@ -131,3 +131,32 @@ class TestCheck:
             check_for_alerts(fake_client, store, RULES, NOW)
 
         assert store.alerts() == []
+
+
+class TestCurrentStatus:
+    @pytest.fixture
+    def market(self, fake_client: FakeClient) -> tuple[dict, dict, dict]:
+        return fake_client.mapping(), fake_client.latest(), fake_client.one_hour()
+
+    def status(
+        self, market: tuple[dict, dict, dict], item_id: int, rules: AlertSettings
+    ) -> tuple[Opportunity | None, str | None]:
+        items, latest, hourly = market
+        return current_status(items[item_id], latest.get(item_id), hourly.get(item_id), rules, NOW)
+
+    def test_uses_the_alert_rules_not_the_scan_defaults(
+        self, market: tuple[dict, dict, dict]
+    ) -> None:
+        opportunity, reason = self.status(market, HALBERD, replace(RULES, min_profit=100_000))
+
+        assert opportunity is not None
+        assert reason is None
+
+        _, reason = self.status(market, HALBERD, replace(RULES, min_profit=800_000))
+        assert reason == "potential profit under 800,000 gp"
+
+    def test_confidence_floor_is_a_reason(self, market: tuple[dict, dict, dict]) -> None:
+        opportunity, reason = self.status(market, SYNAPSE, replace(RULES, min_confidence=40))
+
+        assert opportunity is None
+        assert reason == "confidence under 40"

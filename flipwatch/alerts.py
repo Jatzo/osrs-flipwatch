@@ -9,7 +9,7 @@ from typing import Protocol
 
 from flipwatch.config import AlertSettings
 from flipwatch.models import Alert, Item, LatestPrice, Opportunity, PriceWindow
-from flipwatch.scanner import ScanSettings, rank, scan
+from flipwatch.scanner import ScanSettings, assess, rank, scan
 from flipwatch.store import Store
 
 
@@ -45,6 +45,23 @@ def select_alerts(
         if o.confidence.score >= rules.min_confidence
         and (watchlist is None or o.item.id in watchlist)
     ]
+
+
+def current_status(
+    item: Item,
+    price: LatestPrice | None,
+    window: PriceWindow | None,
+    rules: AlertSettings,
+    now: float,
+) -> tuple[Opportunity | None, str | None]:
+    """Whether an item would alert right now, or the first rule it fails.
+
+    The watchlist and cooldown are left out: this answers whether the flip still holds.
+    """
+    opportunity, reason = assess(item, price, window, scan_settings(rules), now)
+    if opportunity is not None and opportunity.confidence.score < rules.min_confidence:
+        return None, f"confidence under {rules.min_confidence}"
+    return opportunity, reason
 
 
 def check_for_alerts(

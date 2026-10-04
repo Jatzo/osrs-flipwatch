@@ -7,7 +7,7 @@
   <link rel="icon" href="data:,">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
-<body>
+<body data-alert-check="{{ url_for('dashboard.check_alerts') }}" data-latest-alert="{{ latest_alert_id }}">
   <header class="site-header">
     <a class="brand" href="{{ url_for('dashboard.opportunities') }}">Flipwatch</a>
     <nav>
@@ -18,6 +18,12 @@
          {% if endpoint.startswith("dashboard.watch") %}aria-current="page"{% endif %}>Watchlist</a>
       <a href="{{ url_for('dashboard.backtests') }}"
          {% if endpoint.startswith("dashboard.backtest") %}aria-current="page"{% endif %}>Backtests</a>
+      <a href="{{ url_for('dashboard.alerts') }}"
+         {% if endpoint.startswith("dashboard.alerts") %}aria-current="page"{% endif %}>Alerts
+        <span id="alert-count" class="badge" {% if not unread_alerts %}hidden{% endif %}>
+          <span class="visually-hidden">unread: </span><span data-count>{{ unread_alerts }}</span>
+        </span>
+      </a>
     </nav>
     <form class="search" action="{{ url_for('dashboard.search') }}" method="get" role="search">
       <label class="visually-hidden" for="search-box">Find an item</label>
@@ -26,6 +32,7 @@
   </header>
 
   <main>
+    <div id="alert-banners" class="banners" aria-live="polite"></div>
     {% block content %}{% endblock %}
   </main>
 
@@ -34,6 +41,7 @@
     Not affiliated with Jagex.
   </footer>
   <script src="{{ url_for('static', filename='table.js') }}"></script>
+  <script src="{{ url_for('static', filename='alerts.js') }}"></script>
   {% block scripts %}{% endblock %}
 </body>
 </html>
