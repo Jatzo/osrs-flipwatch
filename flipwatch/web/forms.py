@@ -4,6 +4,7 @@ Bad values fall back to the default and are reported back, so a typo in a filter
 a message instead of an error page.
 """
 
+import math
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -32,7 +33,8 @@ class Form:
             value = float(raw)
         except ValueError:
             value = -1
-        if value < 0:
+        # float() also accepts "nan" and "inf", which no setting can use.
+        if not math.isfinite(value) or value < 0:
             self.errors.append(f"{label} must be a number of zero or more, so it was ignored.")
             return default
         return value

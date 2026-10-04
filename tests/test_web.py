@@ -289,6 +289,22 @@ class TestForms:
         assert settings.members is True
         assert settings.no_limit_policy == "volume"
 
+    @pytest.mark.parametrize("value", ["nan", "inf", "-inf", "1e999"])
+    def test_numbers_that_are_not_finite_are_rejected(self, value: str) -> None:
+        settings, form = scan_settings({"min_margin": value, "min_profit": value})
+
+        assert (settings.min_margin, settings.min_profit) == (10, 500_000)
+        assert len(form.errors) == 2
+
+        _, form = backtest_request({"days": value})
+        assert form.errors
+
+    def test_non_finite_filter_does_not_break_the_page(self, client: FlaskClient) -> None:
+        response = client.get("/?min_margin=nan&max_price=inf")
+
+        assert response.status_code == 200
+        assert "Minimum margin must be a number of zero or more" in text(response)
+
     def test_unknown_choices_fall_back_quietly(self) -> None:
         settings, form = scan_settings({"membership": "ironman", "no_limit": "guess"})
 
