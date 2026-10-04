@@ -468,3 +468,35 @@ class TestAlerts:
 def test_dashboard_refuses_to_start_without_a_user_agent(db_path: Path) -> None:
     with pytest.raises(ConfigError, match="FLIPWATCH_USER_AGENT"):
         create_app(Settings(db_path=str(db_path)))
+
+
+class TestCrossSiteRequests:
+    @pytest.mark.parametrize(
+        "headers",
+        [
+            {"Origin": "http://evil.example"},
+            {"Origin": "http://localhost:9999"},
+            {"Sec-Fetch-Site": "cross-site"},
+        ],
+    )
+    def test_posts_from_other_sites_are_refused(
+        self, client: FlaskClient, headers: dict[str, str]
+    ) -> None:
+        response = client.post("/watchlist", data={"item": "Abyssal whip"}, headers=headers)
+
+        assert response.status_code == 403
+        assert "Nothing on the watchlist yet" in text(client.get("/watchlist"))
+
+    @pytest.mark.parametrize(
+        "headers",
+        [{"Origin": "http://localhost", "Sec-Fetch-Site": "same-origin"}, {}],
+    )
+    def test_posts_from_the_dashboard_or_without_browser_headers_work(
+        self, client: FlaskClient, headers: dict[str, str]
+    ) -> None:
+        response = client.post("/watchlist", data={"item": "Abyssal whip"}, headers=headers)
+
+        assert response.status_code == 302
+
+    def test_cross_site_reads_are_unaffected(self, client: FlaskClient) -> None:
+        assert client.get("/", headers={"Origin": "http://evil.example"}).status_code == 200

@@ -127,7 +127,7 @@ flask --app flipwatch.web run
 
 Then open http://127.0.0.1:5000. The dashboard has five pages. Opportunities shows the scan as a table you can filter and sort by clicking any column. Each item has its own page with a chart of average high and low prices, volume underneath, the current margin numbers and, when it is not listed as a flip, the filter it failed. The watchlist keeps items you want to follow, with their numbers whether or not they currently pass the filters. Backtests lists saved runs with their equity curve and per item results, and has a form to start a new run. Alerts is described below.
 
-Charts use your stored history when it covers the chosen range, and otherwise make a single timeseries request to the wiki for that item, cached for five minutes. The dashboard is meant to run on your own machine. It has no login, so do not expose it to a network you do not trust.
+Charts use your stored history when it covers the chosen range, and otherwise make a single timeseries request to the wiki for that item, cached for five minutes. The dashboard is meant to run on your own machine. It has no login, so do not expose it to a network you do not trust. Its forms refuse submissions from other websites, so a page you visit cannot change your watchlist or start a backtest through your browser.
 
 ## Alerts
 

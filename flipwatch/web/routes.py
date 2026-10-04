@@ -21,6 +21,24 @@ MAX_OPPORTUNITY_ROWS = 200
 Page = str | Response | tuple[str | Response, int]
 
 
+@bp.before_app_request
+def refuse_cross_site_posts() -> Page | None:
+    """Stop other websites from submitting the dashboard's forms through your browser.
+
+    The dashboard has no login, so without this any page you visit could add to your
+    watchlist or start a backtest. Browsers send Origin and Sec-Fetch-Site on such
+    requests, so tools like curl that send neither are left alone.
+    """
+    if request.method != "POST":
+        return None
+    origin = request.headers.get("Origin")
+    own_origin = request.host_url.rstrip("/")
+    cross_site = request.headers.get("Sec-Fetch-Site") == "cross-site"
+    if (origin is not None and origin != own_origin) or cross_site:
+        return render_template("error.html", message="That request came from another site."), 403
+    return None
+
+
 @bp.app_context_processor
 def alert_status() -> dict[str, int]:
     """The unread count for the header badge, and where the alert check should resume."""
