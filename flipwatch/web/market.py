@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
-from flipwatch.api import ApiError, PricesClient
+from flipwatch.api import TIMESTEP_SECONDS, ApiError, PricesClient
 from flipwatch.models import Item, LatestPrice, PriceWindow
 from flipwatch.store import Store
 from flipwatch.tax import ge_tax
@@ -67,7 +67,7 @@ def item_history(
     timestep = "5m" if range_seconds <= 24 * 3600 else "1h"
     for stored_timestep in dict.fromkeys(["5m", timestep]):
         stored = store.windows_for_item(item_id, stored_timestep, start=start)
-        if _covers(stored, start, range_seconds):
+        if _covers(stored, start, now, range_seconds, TIMESTEP_SECONDS[stored_timestep]):
             return ItemHistory(stored, f"stored {stored_timestep} windows")
     try:
         points = client.timeseries(item_id, timestep)
@@ -77,9 +77,20 @@ def item_history(
     return ItemHistory(recent, f"the OSRS Wiki {timestep} timeseries")
 
 
-def _covers(windows: Sequence[PriceWindow], start: int, range_seconds: int) -> bool:
-    """True when stored windows reach back over most of the range, not just its end."""
-    return bool(windows) and windows[0].timestamp - start <= range_seconds * COVERAGE_SLACK
+def _covers(
+    windows: Sequence[PriceWindow], start: int, now: float, range_seconds: int, step: int
+) -> bool:
+    """True when stored windows span most of the range at both ends.
+
+    A collector that stopped hours ago leaves history that starts on time but ends early,
+    which would hide the most recent prices, so the end is checked as well as the start.
+    """
+    if not windows:
+        return False
+    slack = range_seconds * COVERAGE_SLACK
+    starts_on_time = windows[0].timestamp - start <= slack
+    ends_recently = now - (windows[-1].timestamp + step) <= slack
+    return starts_on_time and ends_recently
 
 
 def price_chart(windows: Sequence[PriceWindow]) -> dict[str, Any]:

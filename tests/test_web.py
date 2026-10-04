@@ -130,6 +130,17 @@ class TestItem:
         assert "the OSRS Wiki 5m timeseries" in page
         assert fake_client.timeseries_requests == [(WHIP, "5m")]
 
+    def test_stored_history_that_stopped_early_is_not_used(
+        self, client: FlaskClient, fake_client: FakeClient, db_path: Path
+    ) -> None:
+        # Starts on time but the collector stopped six hours ago.
+        self.save_whip_windows(db_path, "5m", NOW - 24 * 3600 + 300, NOW - 6 * 3600)
+
+        page = text(client.get(f"/item/{WHIP}"))
+
+        assert "the OSRS Wiki 5m timeseries" in page
+        assert fake_client.timeseries_requests == [(WHIP, "5m")]
+
     def test_long_range_can_use_stored_hourly_history(
         self, client: FlaskClient, fake_client: FakeClient, db_path: Path
     ) -> None:
