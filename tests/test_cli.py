@@ -391,3 +391,20 @@ class TestWithoutUserAgent:
         assert run_command(fake_client, "backtest", "--days", "1") == 0
 
         assert "Backtest 1: margin strategy" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(
+    ("args", "message"),
+    [
+        (["scan", "--top", "lots"], "--top: must be a whole number, got 'lots'"),
+        (["scan", "--min-roi", "nan"], "--min-roi: must be a number, got 'nan'"),
+        (["backtest", "--offer-hours", "inf"], "--offer-hours: must be a number, got 'inf'"),
+    ],
+)
+def test_bad_numbers_get_a_plain_message(
+    fake_client: FakeClient, capsys: pytest.CaptureFixture[str], args: list[str], message: str
+) -> None:
+    with pytest.raises(SystemExit):
+        run_command(fake_client, *args)
+
+    assert message in capsys.readouterr().err

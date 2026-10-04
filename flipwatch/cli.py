@@ -2,6 +2,7 @@
 
 import argparse
 import logging
+import math
 import sys
 import time
 from collections.abc import Callable, Sequence
@@ -105,7 +106,7 @@ def _add_scan_command(commands: argparse._SubParsersAction) -> None:
     scan_parser.add_argument(
         "--min-roi",
         type=_non_negative_float,
-        default=0.0,
+        default=defaults.min_roi * 100,
         metavar="PERCENT",
         help="minimum return on the buy price, as a percentage",
     )
@@ -183,7 +184,10 @@ def _add_backtest_command(commands: argparse._SubParsersAction) -> None:
         "fill model. The result is an estimate, not a promise of future profit.",
     )
     backtest_parser.add_argument(
-        "--strategy", choices=list(STRATEGIES), default="margin", help="default margin"
+        "--strategy",
+        choices=list(STRATEGIES),
+        default="margin",
+        help="strategy to test (default margin)",
     )
     period = backtest_parser.add_mutually_exclusive_group()
     period.add_argument(
@@ -474,29 +478,46 @@ def _parse_date(value: str) -> int:
     return int(day.timestamp())
 
 
-def _positive_float(value: str) -> float:
-    number = float(value)
-    if number <= 0:
-        raise argparse.ArgumentTypeError(f"must be greater than zero, got {value}")
+def _whole_number(value: str) -> int:
+    try:
+        return int(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"must be a whole number, got {value!r}") from None
+
+
+def _number(value: str) -> float:
+    try:
+        number = float(value)
+    except ValueError:
+        number = math.nan
+    if not math.isfinite(number):
+        raise argparse.ArgumentTypeError(f"must be a number, got {value!r}")
     return number
 
 
 def _positive_int(value: str) -> int:
-    number = int(value)
+    number = _whole_number(value)
     if number <= 0:
         raise argparse.ArgumentTypeError(f"must be greater than zero, got {value}")
     return number
 
 
 def _non_negative_int(value: str) -> int:
-    number = int(value)
+    number = _whole_number(value)
     if number < 0:
         raise argparse.ArgumentTypeError(f"cannot be negative, got {value}")
     return number
 
 
+def _positive_float(value: str) -> float:
+    number = _number(value)
+    if number <= 0:
+        raise argparse.ArgumentTypeError(f"must be greater than zero, got {value}")
+    return number
+
+
 def _non_negative_float(value: str) -> float:
-    number = float(value)
+    number = _number(value)
     if number < 0:
         raise argparse.ArgumentTypeError(f"cannot be negative, got {value}")
     return number
