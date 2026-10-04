@@ -1,5 +1,5 @@
 /* Colours follow the Old School RuneScape interface: parchment, worn brown leather and
-   gold, with the game's yellow and orange for the two price lines. */
+   gold. There is one light theme, so pages look the same whatever the system setting. */
 :root {
   --bg: #e2dbc8;
   --panel: #efe8d6;
@@ -18,29 +18,8 @@
   --high: #c48a10;
   --low: #a8481a;
   --row-hover: #e6dcc3;
+  color-scheme: light;
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #1f1a14;
-    --panel: #2c251c;
-    --text: #ece0c2;
-    --muted: #b3a283;
-    --border: #4d4132;
-    --accent: #ffb83f;
-    --on-accent: #1f1a14;
-    --header-bg: #14110d;
-    --header-text: #d8ccb0;
-    --header-accent: #ffcf3f;
-    --good: #6cc24a;
-    --bad: #ff6b57;
-    --notice: #3a2f1b;
-    --notice-border: #8a6c28;
-    --high: #ffff00;
-    --low: #ff981f;
-    --row-hover: #362e23;
-  }
 }
 
 * { box-sizing: border-box; }
