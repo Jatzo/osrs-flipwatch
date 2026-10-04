@@ -5,6 +5,7 @@ from flipwatch.config import (
     DEFAULT_DB_PATH,
     DEFAULT_HTTP_TIMEOUT_SECONDS,
     DEFAULT_RETENTION_DAYS,
+    AlertSettings,
     ConfigError,
     load_settings,
 )
@@ -76,3 +77,47 @@ def test_invalid_retention_is_rejected(value: str) -> None:
 
     with pytest.raises(ConfigError, match="FLIPWATCH_RETENTION_DAYS"):
         load_settings(env)
+
+
+def test_alert_defaults() -> None:
+    assert load_settings({"FLIPWATCH_USER_AGENT": USER_AGENT}).alerts == AlertSettings()
+
+
+def test_alert_settings_are_read() -> None:
+    settings = load_settings(
+        {
+            "FLIPWATCH_USER_AGENT": USER_AGENT,
+            "FLIPWATCH_ALERT_MIN_MARGIN": "25",
+            "FLIPWATCH_ALERT_MIN_PROFIT": "1000000",
+            "FLIPWATCH_ALERT_MIN_ROI": "2.5",
+            "FLIPWATCH_ALERT_MIN_VOLUME": "100",
+            "FLIPWATCH_ALERT_MIN_CONFIDENCE": "60",
+            "FLIPWATCH_ALERT_WATCHLIST_ONLY": "yes",
+            "FLIPWATCH_ALERT_COOLDOWN_MINUTES": "15",
+        }
+    )
+
+    assert settings.alerts == AlertSettings(
+        min_margin=25,
+        min_profit=1_000_000,
+        min_roi=0.025,
+        min_volume=100,
+        min_confidence=60,
+        watchlist_only=True,
+        cooldown_minutes=15,
+    )
+
+
+@pytest.mark.parametrize(
+    ("name", "value"),
+    [
+        ("FLIPWATCH_ALERT_MIN_MARGIN", "ten"),
+        ("FLIPWATCH_ALERT_MIN_ROI", "-1"),
+        ("FLIPWATCH_ALERT_MIN_CONFIDENCE", "101"),
+        ("FLIPWATCH_ALERT_WATCHLIST_ONLY", "maybe"),
+        ("FLIPWATCH_ALERT_COOLDOWN_MINUTES", "0"),
+    ],
+)
+def test_invalid_alert_settings_are_rejected(name: str, value: str) -> None:
+    with pytest.raises(ConfigError, match=name):
+        load_settings({"FLIPWATCH_USER_AGENT": USER_AGENT, name: value})

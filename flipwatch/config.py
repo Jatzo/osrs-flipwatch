@@ -2,7 +2,7 @@
 
 import os
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from dotenv import load_dotenv
 
@@ -91,6 +91,18 @@ class ConfigError(Exception):
 
 
 @dataclass(frozen=True)
+class AlertSettings:
+    min_margin: int = 10
+    min_profit: int = 500_000
+    # A fraction, so 0.01 is 1%. The environment variable takes a percentage.
+    min_roi: float = 0.01
+    min_volume: int = 50
+    min_confidence: int = 40
+    watchlist_only: bool = False
+    cooldown_minutes: int = 60
+
+
+@dataclass(frozen=True)
 class Settings:
     user_agent: str
     api_base_url: str = DEFAULT_API_BASE_URL
@@ -98,6 +110,7 @@ class Settings:
     db_path: str = DEFAULT_DB_PATH
     # Zero keeps stored price data forever.
     retention_days: int = DEFAULT_RETENTION_DAYS
+    alerts: AlertSettings = field(default_factory=AlertSettings)
 
 
 def load_settings(env: Mapping[str, str] | None = None) -> Settings:
@@ -122,6 +135,28 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
         ),
         db_path=env.get("FLIPWATCH_DB_PATH", "").strip() or DEFAULT_DB_PATH,
         retention_days=_non_negative_int(env, "FLIPWATCH_RETENTION_DAYS", DEFAULT_RETENTION_DAYS),
+        alerts=_alert_settings(env),
+    )
+
+
+def _alert_settings(env: Mapping[str, str]) -> AlertSettings:
+    defaults = AlertSettings()
+    min_confidence = _non_negative_int(
+        env, "FLIPWATCH_ALERT_MIN_CONFIDENCE", defaults.min_confidence
+    )
+    if min_confidence > 100:
+        raise ConfigError(f"FLIPWATCH_ALERT_MIN_CONFIDENCE must be 0 to 100, got {min_confidence}")
+    cooldown = _non_negative_int(env, "FLIPWATCH_ALERT_COOLDOWN_MINUTES", defaults.cooldown_minutes)
+    if cooldown == 0:
+        raise ConfigError("FLIPWATCH_ALERT_COOLDOWN_MINUTES must be at least 1")
+    return AlertSettings(
+        min_margin=_non_negative_int(env, "FLIPWATCH_ALERT_MIN_MARGIN", defaults.min_margin),
+        min_profit=_non_negative_int(env, "FLIPWATCH_ALERT_MIN_PROFIT", defaults.min_profit),
+        min_roi=_non_negative_float(env, "FLIPWATCH_ALERT_MIN_ROI", defaults.min_roi * 100) / 100,
+        min_volume=_non_negative_int(env, "FLIPWATCH_ALERT_MIN_VOLUME", defaults.min_volume),
+        min_confidence=min_confidence,
+        watchlist_only=_flag(env, "FLIPWATCH_ALERT_WATCHLIST_ONLY", defaults.watchlist_only),
+        cooldown_minutes=cooldown,
     )
 
 
@@ -149,3 +184,27 @@ def _non_negative_int(env: Mapping[str, str], name: str, default: int) -> int:
     if value < 0:
         raise ConfigError(f"{name} cannot be negative, got {raw!r}")
     return value
+
+
+def _non_negative_float(env: Mapping[str, str], name: str, default: float) -> float:
+    raw = env.get(name)
+    if raw is None or not raw.strip():
+        return default
+    try:
+        value = float(raw)
+    except ValueError:
+        raise ConfigError(f"{name} must be a number, got {raw!r}") from None
+    if value < 0:
+        raise ConfigError(f"{name} cannot be negative, got {raw!r}")
+    return value
+
+
+def _flag(env: Mapping[str, str], name: str, default: bool) -> bool:
+    raw = env.get(name, "").strip().lower()
+    if not raw:
+        return default
+    if raw in {"1", "true", "yes", "on"}:
+        return True
+    if raw in {"0", "false", "no", "off"}:
+        return False
+    raise ConfigError(f"{name} must be true or false, got {raw!r}")
