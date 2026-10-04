@@ -376,7 +376,9 @@ class TestWithoutUserAgent:
     def no_user_agent(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv("FLIPWATCH_USER_AGENT")
 
-    @pytest.mark.parametrize("command", [["scan"], ["collect", "--once"], ["seed", "4151"]])
+    @pytest.mark.parametrize(
+        "command", [["scan"], ["collect", "--once"], ["seed", "4151"], ["plan"]]
+    )
     def test_commands_that_call_the_api_refuse(
         self, fake_client: FakeClient, capsys: pytest.CaptureFixture[str], command: list[str]
     ) -> None:
@@ -408,3 +410,50 @@ def test_bad_numbers_get_a_plain_message(
         run_command(fake_client, *args)
 
     assert message in capsys.readouterr().err
+
+
+class TestPlan:
+    def test_fills_slots_with_what_the_cash_allows(
+        self, fake_client: FakeClient, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        assert run_command(fake_client, "plan") == 0
+
+        output = capsys.readouterr().out
+        # The synapse scores below the confidence floor and the cheap items have tiny
+        # margins, so the halberd is the only flip, and 50m buys one.
+        assert table_rows(output)[0].split() == [
+            "Noxious", "halberd", "37,571,954", "38,500,000", "1", "37,571,954", "158,046", "59",
+        ]  # fmt: skip
+        assert "Cash used 37,571,954 of 50,000,000, 12,428,046 left over." in output
+        assert "Profit per round 158,046, about 39,512 an hour." in output
+
+    def test_confidence_and_capital_options(
+        self, fake_client: FakeClient, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        run_command(fake_client, "plan", "--min-confidence", "0", "--capital", "78m")
+
+        rows = table_rows(capsys.readouterr().out)
+        # One synapse at 39.5m leaves 38.5m, enough for one halberd at 37.6m.
+        assert [(row.split("  ")[0].strip(), row.split()[-4]) for row in rows] == [
+            (SYNAPSE, "1"),
+            (HALBERD, "1"),
+        ]
+
+    def test_free_to_play_with_nothing_worth_a_slot(
+        self, fake_client: FakeClient, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        assert run_command(fake_client, "plan", "--f2p") == 0
+
+        assert (
+            capsys.readouterr().out.strip()
+            == "No flips worth a slot right now with these settings."
+        )
+
+    @pytest.mark.parametrize(
+        "args", [["--min-confidence", "101"], ["--slots", "0"], ["--capital", "lots"]]
+    )
+    def test_invalid_options(self, fake_client: FakeClient, args: list[str]) -> None:
+        with pytest.raises(SystemExit) as exit_info:
+            run_command(fake_client, "plan", *args)
+
+        assert exit_info.value.code == 2

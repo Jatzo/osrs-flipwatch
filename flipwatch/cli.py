@@ -16,6 +16,7 @@ from flipwatch.backtest import BacktestResult, BacktestSettings
 from flipwatch.coins import parse_coins
 from flipwatch.config import ConfigError, Settings, load_settings, require_user_agent
 from flipwatch.models import Opportunity
+from flipwatch.planner import ROUND_HOURS, Plan, PlanSettings, make_plan, plan_scan_settings
 from flipwatch.runner import STRATEGIES, BacktestRequest, BacktestRequestError, run_and_save
 from flipwatch.scanner import NoLimitPolicy, ScanSettings, SortKey, rank, scan
 from flipwatch.store import Store, StoreError
@@ -63,6 +64,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_seed_command(commands)
     _add_status_command(commands)
     _add_backtest_command(commands)
+    _add_plan_command(commands)
     return parser
 
 
@@ -241,6 +243,36 @@ def _add_backtest_command(commands: argparse._SubParsersAction) -> None:
     backtest_parser.set_defaults(run=run_backtest_command)
 
 
+def _add_plan_command(commands: argparse._SubParsersAction) -> None:
+    defaults = PlanSettings()
+    plan_parser = commands.add_parser(
+        "plan",
+        help="choose the flips to put in your offer slots",
+        description="Fill each offer slot with the flip that adds the most profit for the "
+        "cash you have, and show what one round would make.",
+    )
+    plan_parser.add_argument(
+        "--capital",
+        type=_coins,
+        default=defaults.capital,
+        help="coins to spend, for example 50m or 1.5b (default 50m)",
+    )
+    plan_parser.add_argument(
+        "--slots",
+        type=_positive_int,
+        default=defaults.slots,
+        help=f"offer slots to fill (default {defaults.slots}, free to play accounts have 3)",
+    )
+    plan_parser.add_argument(
+        "--min-confidence",
+        type=_confidence,
+        default=defaults.min_confidence,
+        help=f"leave out flips scoring below this, 0 to 100 (default {defaults.min_confidence})",
+    )
+    plan_parser.add_argument("--f2p", action="store_true", help="free to play items only")
+    plan_parser.set_defaults(run=run_plan)
+
+
 def run_scan(args: argparse.Namespace, runtime: Runtime) -> int:
     settings = ScanSettings(
         min_volume=args.min_volume,
@@ -267,6 +299,51 @@ def run_scan(args: argparse.Namespace, runtime: Runtime) -> int:
     print(f"Showing {len(shown)} of {len(opportunities)} {noun}, ranked by {args.sort}.")
     print("Conf is liquidity multiplied by stability, each scored out of 100.")
     return 0
+
+
+def run_plan(args: argparse.Namespace, runtime: Runtime) -> int:
+    settings = PlanSettings(
+        capital=args.capital, slots=args.slots, min_confidence=args.min_confidence
+    )
+    with _open_client(runtime) as client:
+        found = scan(
+            client.mapping(),
+            client.latest(),
+            client.one_hour(),
+            plan_scan_settings(free_to_play=args.f2p),
+            runtime.clock(),
+        )
+    print(format_plan(make_plan(found, settings)))
+    return 0
+
+
+def format_plan(plan: Plan) -> str:
+    if not plan.flips:
+        return "No flips worth a slot right now with these settings."
+    rows = [
+        [
+            _truncate(f.opportunity.item.name, MAX_NAME_WIDTH),
+            f"{f.opportunity.buy_price:,}",
+            f"{f.opportunity.sell_price:,}",
+            f"{f.quantity:,}",
+            f"{f.cost:,}",
+            f"{f.profit:,}",
+            str(f.opportunity.confidence.score),
+        ]
+        for f in plan.flips
+    ]
+    table = render_table(["Item", "Buy", "Sell", "Qty", "Cash", "Profit", "Conf"], rows)
+    return "\n".join(
+        [
+            table,
+            "",
+            f"Cash used {plan.cash_used:,} of {plan.settings.capital:,}, "
+            f"{plan.cash_left:,} left over.",
+            f"Profit per round {plan.profit:,}, about {plan.profit_per_hour:,.0f} an hour.",
+            f"A round can repeat every {ROUND_HOURS:g} hours when buy limits reset. The hourly "
+            "figure assumes every offer fills within that time.",
+        ]
+    )
 
 
 def run_collect(args: argparse.Namespace, runtime: Runtime) -> int:
@@ -506,6 +583,13 @@ def _non_negative_int(value: str) -> int:
     number = _whole_number(value)
     if number < 0:
         raise argparse.ArgumentTypeError(f"cannot be negative, got {value}")
+    return number
+
+
+def _confidence(value: str) -> int:
+    number = _whole_number(value)
+    if not 0 <= number <= 100:
+        raise argparse.ArgumentTypeError(f"must be 0 to 100, got {value}")
     return number
 
 

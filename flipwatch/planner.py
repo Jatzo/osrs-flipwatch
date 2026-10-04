@@ -5,7 +5,7 @@ from dataclasses import dataclass
 
 from flipwatch.config import BUY_LIMIT_WINDOW_SECONDS, GE_OFFER_SLOTS
 from flipwatch.models import Opportunity
-from flipwatch.scanner import rank
+from flipwatch.scanner import ScanSettings, rank
 
 # Buy limits reset every four hours, so a full round of flips can repeat that often.
 ROUND_HOURS = BUY_LIMIT_WINDOW_SECONDS / 3600
@@ -63,6 +63,12 @@ class Plan:
     def profit_per_hour(self) -> float:
         """Assumes a full round fills and repeats each time buy limits reset."""
         return self.profit / ROUND_HOURS
+
+
+def plan_scan_settings(free_to_play: bool = False) -> ScanSettings:
+    """The usual scan filters without the profit floor, since a small flip can still be the
+    best use of a spare slot."""
+    return ScanSettings(min_profit=0, members=False if free_to_play else None)
 
 
 def make_plan(opportunities: Iterable[Opportunity], settings: PlanSettings) -> Plan:
