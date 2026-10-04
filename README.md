@@ -83,6 +83,16 @@ The stored data holds average prices and volumes for each window, not individual
 
 A backtest is an estimate, not a promise. Averages hide the spread of prices inside a window, so a real offer may fill more or less than the model says. Other flippers compete for the same volume, prices react to your own trades on thin items, and the buy limits come from the wiki rather than the game itself. The model also has no idea about game updates or news that moved prices in the past. Use the results to compare strategies with each other, not to predict what you will earn.
 
+## Dashboard
+
+```
+flask --app flipwatch.web run
+```
+
+Then open http://127.0.0.1:5000. The dashboard has four pages. Opportunities shows the scan as a table you can filter and sort by clicking any column. Each item has its own page with a chart of average high and low prices, volume underneath, the current margin numbers and, when it is not listed as a flip, the filter it failed. The watchlist keeps items you want to follow, with their numbers whether or not they currently pass the filters. Backtests lists saved runs with their equity curve and per item results, and has a form to start a new run.
+
+Charts use your stored history when it covers the chosen range, and otherwise make a single timeseries request to the wiki for that item, cached for five minutes. The dashboard is meant to run on your own machine. It has no login, so do not expose it to a network you do not trust.
+
 ## Configuration
 
 Settings come from environment variables or a `.env` file. See `.env.example` for the full list.
