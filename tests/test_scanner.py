@@ -5,12 +5,14 @@ import pytest
 
 from flipwatch.models import Item, LatestPrice, Opportunity, PriceWindow
 from flipwatch.scanner import (
+    Margin,
     NoLimitPolicy,
     ScanSettings,
     SortKey,
     assess,
     confidence,
     evaluate,
+    margin_at,
     rank,
     realistic_quantity,
     scan,
@@ -422,3 +424,14 @@ class TestSkipReasons:
         reason = self.reason(make_item(members=False), settings=replace(SETTINGS, members=True))
 
         assert reason == "free to play item"
+
+
+class TestMarginAt:
+    def test_margin_after_tax(self) -> None:
+        assert margin_at(make_item(), make_price()) == Margin(1_000, 1_100, 22, 78, 0.078)
+
+    @pytest.mark.parametrize(
+        "price", [None, make_price(low=None), make_price(high=None), make_price(low=0)]
+    )
+    def test_needs_both_sides(self, price: LatestPrice | None) -> None:
+        assert margin_at(make_item(), price) is None

@@ -75,6 +75,26 @@ def scan(
     return opportunities
 
 
+@dataclass(frozen=True)
+class Margin:
+    """What one flip of one item makes at the latest prices, after tax."""
+
+    buy_price: int
+    sell_price: int
+    tax: int
+    margin: int
+    roi: float
+
+
+def margin_at(item: Item, price: LatestPrice | None) -> Margin | None:
+    """Work out the margin from the latest prices, or None without both sides."""
+    if price is None or price.low is None or price.high is None or price.low <= 0:
+        return None
+    tax = ge_tax(price.high, item.id)
+    margin = price.high - price.low - tax
+    return Margin(price.low, price.high, tax, margin, margin / price.low)
+
+
 def evaluate(
     item: Item,
     price: LatestPrice,
@@ -99,23 +119,18 @@ def assess(
         return None, "excluded from tracking"
     if settings.members is not None and item.members != settings.members:
         return None, "members item" if item.members else "free to play item"
-    if price is None or price.low is None or price.high is None or price.low <= 0:
+    gap = margin_at(item, price)
+    if price is None or gap is None:
         return None, "no recent instant buy and sell prices"
     if not _is_fresh(price, settings.freshness_seconds, now):
         return None, f"prices are older than {settings.freshness_seconds // 60} minutes"
-
-    buy_price, sell_price = price.low, price.high
-    if settings.max_buy_price is not None and buy_price > settings.max_buy_price:
+    if settings.max_buy_price is not None and gap.buy_price > settings.max_buy_price:
         return None, f"buy price above {settings.max_buy_price:,} gp"
-
-    tax = ge_tax(sell_price, item.id)
-    margin = sell_price - buy_price - tax
-    roi = margin / buy_price
-    if margin <= 0:
+    if gap.margin <= 0:
         return None, "no margin after tax"
-    if margin < settings.min_margin:
+    if gap.margin < settings.min_margin:
         return None, f"margin under {settings.min_margin:,} gp"
-    if roi < settings.min_roi:
+    if gap.roi < settings.min_roi:
         return None, f"ROI under {settings.min_roi:.1%}"
 
     if window is None:
@@ -129,20 +144,20 @@ def assess(
         return None, "no listed buy limit"
     if quantity == 0:
         return None, "too little volume to trade any"
-    if margin * quantity < settings.min_profit:
+    if gap.margin * quantity < settings.min_profit:
         return None, f"potential profit under {settings.min_profit:,} gp"
 
     opportunity = Opportunity(
         item=item,
-        buy_price=buy_price,
-        sell_price=sell_price,
-        tax=tax,
-        margin=margin,
-        roi=roi,
+        buy_price=gap.buy_price,
+        sell_price=gap.sell_price,
+        tax=gap.tax,
+        margin=gap.margin,
+        roi=gap.roi,
         low_volume=window.low_volume,
         high_volume=window.high_volume,
         quantity=quantity,
-        potential_profit=margin * quantity,
+        potential_profit=gap.margin * quantity,
         confidence=confidence(price, window, settings),
     )
     return opportunity, None

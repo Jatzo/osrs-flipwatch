@@ -6,25 +6,13 @@ from datetime import UTC, datetime
 from typing import Any
 
 from flipwatch.api import TIMESTEP_SECONDS, ApiError, PricesClient
-from flipwatch.models import Item, LatestPrice, PriceWindow
+from flipwatch.models import Item, PriceWindow
 from flipwatch.store import Store
-from flipwatch.tax import ge_tax
 
 CHART_RANGES = {"6h": 6 * 3600, "24h": 24 * 3600, "7d": 7 * 24 * 3600}
 MAX_SEARCH_RESULTS = 50
 # Stored history may start this share of the range late and still be used for the chart.
 COVERAGE_SLACK = 0.1
-
-
-@dataclass(frozen=True)
-class PriceSummary:
-    """Margin numbers from the latest prices, shown even when an item fails the filters."""
-
-    buy_price: int
-    sell_price: int
-    tax: int
-    margin: int
-    roi: float
 
 
 @dataclass(frozen=True)
@@ -48,14 +36,6 @@ def find_items(items: Mapping[int, Item], query: str) -> list[Item]:
         return exact
     partial = [item for item in items.values() if lowered in item.name.lower()]
     return sorted(partial, key=lambda item: (len(item.name), item.name))[:MAX_SEARCH_RESULTS]
-
-
-def price_summary(item: Item, price: LatestPrice | None) -> PriceSummary | None:
-    if price is None or price.low is None or price.high is None or price.low <= 0:
-        return None
-    tax = ge_tax(price.high, item.id)
-    margin = price.high - price.low - tax
-    return PriceSummary(price.low, price.high, tax, margin, margin / price.low)
 
 
 def item_history(

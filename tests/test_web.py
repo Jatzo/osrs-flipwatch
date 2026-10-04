@@ -12,7 +12,7 @@ from flipwatch.models import Item, PriceWindow
 from flipwatch.store import Store
 from flipwatch.web import create_app
 from flipwatch.web.forms import backtest_request, scan_settings
-from flipwatch.web.market import find_items, price_summary
+from flipwatch.web.market import find_items
 from tests.fakes import FakeClient
 
 NOW = 1_791_066_600
@@ -370,9 +370,6 @@ class TestMarketHelpers:
         assert [i.name for i in find_items(items, " 3 ")] == ["Iron bar"]
         assert find_items(items, "99") == []
         assert find_items(items, "  ") == []
-
-    def test_price_summary_needs_both_sides(self, items: dict[int, Item]) -> None:
-        assert price_summary(items[1], None) is None
 
 
 class TestAlerts:

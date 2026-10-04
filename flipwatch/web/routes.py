@@ -10,7 +10,7 @@ from flipwatch.api import ApiError
 from flipwatch.config import EXCLUDED_ITEM_IDS
 from flipwatch.models import Alert
 from flipwatch.runner import STRATEGIES, BacktestRequestError, run_and_save
-from flipwatch.scanner import ScanSettings, assess, rank, scan
+from flipwatch.scanner import ScanSettings, assess, margin_at, rank, scan
 from flipwatch.web import forms, market
 from flipwatch.web.context import dashboard, store
 
@@ -75,7 +75,7 @@ def item(item_id: int) -> Page:
         "item.html",
         item=found,
         latest=latest,
-        summary=market.price_summary(found, latest),
+        summary=margin_at(found, latest),
         opportunity=opportunity,
         reason=reason,
         history=history,
@@ -181,9 +181,7 @@ def alerts() -> Page:
             opportunity, reason = current_status(
                 found, price, hourly.get(item_id), app.settings.alerts, now
             )
-            row.update(
-                summary=market.price_summary(found, price), opportunity=opportunity, reason=reason
-            )
+            row.update(summary=margin_at(found, price), opportunity=opportunity, reason=reason)
     return render_template("alerts.html", rows=rows, rules=app.settings.alerts, api_error=api_error)
 
 
@@ -244,7 +242,7 @@ def _render_watchlist(
                 rows.append(
                     {
                         "item": found,
-                        "summary": market.price_summary(found, price),
+                        "summary": margin_at(found, price),
                         "opportunity": opportunity,
                         "reason": reason,
                     }
