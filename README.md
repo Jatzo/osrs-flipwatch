@@ -23,8 +23,8 @@ The dashboard is a small Flask app over the same code. It shows the scan, a char
 You need Python 3.12 or later. On Windows:
 
 ```
-git clone https://github.com/Jatzo/OSRS-Flipping-Tool.git
-cd OSRS-Flipping-Tool
+git clone https://github.com/Jatzo/osrs-flipwatch.git
+cd osrs-flipwatch
 python -m venv .venv
 .venv\Scripts\activate
 pip install -e ".[dev]"
