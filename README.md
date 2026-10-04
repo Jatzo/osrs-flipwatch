@@ -166,7 +166,7 @@ MIT. See [LICENSE](LICENSE).
 
 This is a personal portfolio project. These are the skills it shows, with where to look.
 
-- **Python 3.12:** typed throughout with dataclasses, enums, protocols and generics, and the standard library preferred over extra dependencies.
+- **Python:** typed throughout with dataclasses, enums, protocols and generics, and the standard library preferred over extra dependencies.
 - **API client design:** an `httpx` client for the OSRS Wiki prices API with per-endpoint caching that is safe across threads, a required descriptive user agent and clear errors (`flipwatch/api.py`). It was built against saved real responses rather than assumed shapes.
 - **SQLite without an ORM:** schema versions that migrate in order, WAL mode so the dashboard can read while the collector writes, keys and indexes laid out for the queries the backtester and dashboard run, and a single-statement cooldown check that two browser tabs cannot race (`flipwatch/store.py`).
 - **Domain modelling:** Grand Exchange tax rules in exact whole-number arithmetic, an explainable confidence score that multiplies a log-scaled liquidity by price stability, and a greedy planner that fills offer slots under cash and buy-limit constraints (`tax.py`, `scanner.py`, `planner.py`).
@@ -174,5 +174,5 @@ This is a personal portfolio project. These are the skills it shows, with where 
 - **Scheduled data collection:** a collector aligned to five minute window boundaries that backfills gaps, retries failed windows and prunes old data (`collector.py`).
 - **Web development:** a Flask app factory with Jinja templates, plain JavaScript for sortable tables, live alerts and desktop notifications, Chart.js charts, and protection against cross-site form posts and unsafe redirects (`flipwatch/web/`).
 - **Command line tools:** `argparse` subcommands for scanning, collecting, backtesting and planning, with plain error messages (`cli.py`).
-- **Testing and quality:** over 400 `pytest` tests using fixtures, fakes and `respx` to mock HTTP, including a deterministic test for a thread race. `ruff` handles linting and formatting, and GitHub Actions runs both on Python 3.12 and 3.13.
+- **Testing and quality:** over 400 `pytest` tests using fixtures, fakes and `respx` to mock HTTP, including a deterministic test for a thread race. `ruff` handles linting and formatting, and GitHub Actions runs both on every push.
 - **Working practice:** each feature was planned before it was built and committed in small, focused steps. The README is kept accurate to the code.
