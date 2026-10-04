@@ -175,6 +175,7 @@ def _add_status_command(commands: argparse._SubParsersAction) -> None:
 
 def _add_backtest_command(commands: argparse._SubParsersAction) -> None:
     defaults = BacktestSettings()
+    request_defaults = BacktestRequest()
     backtest_parser = commands.add_parser(
         "backtest",
         help="test a strategy against stored price history",
@@ -188,8 +189,9 @@ def _add_backtest_command(commands: argparse._SubParsersAction) -> None:
     period.add_argument(
         "--days",
         type=_positive_int,
-        default=7,
-        help="test the most recent number of days of stored data (default 7)",
+        default=request_defaults.days,
+        help="test the most recent number of days of stored data "
+        f"(default {request_defaults.days})",
     )
     period.add_argument("--start", type=_parse_date, help="first day to test, YYYY-MM-DD in UTC")
     backtest_parser.add_argument(
@@ -204,8 +206,8 @@ def _add_backtest_command(commands: argparse._SubParsersAction) -> None:
     universe.add_argument(
         "--top",
         type=_positive_int,
-        default=50,
-        help="trade the most traded items in the period (default 50)",
+        default=request_defaults.top,
+        help=f"trade the most traded items in the period (default {request_defaults.top})",
     )
     backtest_parser.add_argument(
         "--capital",

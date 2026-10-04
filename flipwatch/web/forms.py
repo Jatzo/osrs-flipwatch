@@ -70,11 +70,12 @@ def scan_settings(args: Mapping[str, str]) -> tuple[ScanSettings, Form]:
 
 def backtest_request(args: Mapping[str, str]) -> tuple[BacktestRequest, Form]:
     defaults = BacktestSettings()
+    request_defaults = BacktestRequest()
     form = Form()
     strategy = form.choice(args, "strategy", list(STRATEGIES), "margin")
     timestep = form.choice(args, "timestep", ["5m", "1h"], "5m")
-    days = form.number(args, "days", "Days", 7)
-    top = form.number(args, "top", "Top items", 50)
+    days = form.number(args, "days", "Days", request_defaults.days)
+    top = form.number(args, "top", "Top items", request_defaults.top)
     fill_share = form.number(args, "fill_share", "Fill share", defaults.fill_share * 100)
     offer_hours = form.number(
         args, "offer_hours", "Offer hours", defaults.offer_lifetime_seconds / 3600
@@ -88,7 +89,8 @@ def backtest_request(args: Mapping[str, str]) -> tuple[BacktestRequest, Form]:
             "Days and top items must be at least 1, fill share between 0 and 100 "
             "and offer hours above 0."
         )
-        days, top, fill_share = 7, 50, defaults.fill_share * 100
+        days, top = request_defaults.days, request_defaults.top
+        fill_share = defaults.fill_share * 100
         offer_hours = defaults.offer_lifetime_seconds / 3600
 
     request = BacktestRequest(
