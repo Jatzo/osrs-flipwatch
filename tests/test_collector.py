@@ -10,7 +10,6 @@ from flipwatch.collector import (
     BACKFILL_WINDOWS,
     COLLECT_DELAY_SECONDS,
     MAX_SEED_ITEMS,
-    SECONDS_PER_DAY,
     collect_once,
     last_complete_window,
     prune,
@@ -18,6 +17,7 @@ from flipwatch.collector import (
     seconds_until_next_run,
     seed,
 )
+from flipwatch.config import SECONDS_PER_DAY
 from flipwatch.models import Item, PriceWindow
 from flipwatch.store import Store
 

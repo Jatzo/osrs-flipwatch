@@ -8,10 +8,9 @@ from dataclasses import dataclass, field
 
 from flipwatch.api import TIMESTEP_SECONDS
 from flipwatch.backtest import BacktestResult, BacktestSettings, Strategy, run_backtest
+from flipwatch.config import SECONDS_PER_DAY
 from flipwatch.store import Store
 from flipwatch.strategies import DipBuy, MarginFlip
-
-SECONDS_PER_DAY = 24 * 60 * 60
 
 STRATEGIES: dict[str, Callable[[], Strategy]] = {"margin": MarginFlip, "dip": DipBuy}
 

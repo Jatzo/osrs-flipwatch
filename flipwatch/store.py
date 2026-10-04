@@ -60,8 +60,6 @@ CREATE TABLE backtest_runs (
 );
 """
 
-# Each entry upgrades the schema by one version. Never edit one that has shipped:
-# add a new entry instead, so existing databases upgrade in place.
 _SCHEMA_V3 = """
 CREATE TABLE watchlist (
     item_id INTEGER PRIMARY KEY,
@@ -87,6 +85,8 @@ CREATE TABLE alerts (
 CREATE INDEX alerts_by_item ON alerts (item_id, created_at);
 """
 
+# Each entry upgrades the schema by one version. Never edit one that has shipped:
+# add a new entry instead, so existing databases upgrade in place.
 _MIGRATIONS = [_SCHEMA_V1, _SCHEMA_V2, _SCHEMA_V3, _SCHEMA_V4]
 
 _ALERT_COLUMNS = (

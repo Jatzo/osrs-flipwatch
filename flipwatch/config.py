@@ -17,6 +17,8 @@ DEFAULT_RETENTION_DAYS = 90
 GE_TAX_RATE_PERCENT = 2
 GE_TAX_CAP = 5_000_000
 
+SECONDS_PER_DAY = 24 * 60 * 60
+
 # A buy limit applies to a rolling four hour window that starts with the first purchase.
 BUY_LIMIT_WINDOW_SECONDS = 4 * 60 * 60
 # Members get eight Grand Exchange offer slots, free to play accounts get three.

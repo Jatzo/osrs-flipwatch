@@ -8,7 +8,7 @@ from datetime import UTC, datetime
 from typing import Protocol
 
 from flipwatch.api import TIMESTEP_SECONDS, ApiError
-from flipwatch.config import EXCLUDED_ITEM_IDS
+from flipwatch.config import EXCLUDED_ITEM_IDS, SECONDS_PER_DAY
 from flipwatch.models import Item, PriceWindow
 from flipwatch.store import Store
 
@@ -22,8 +22,6 @@ BACKFILL_WINDOWS = 12
 COLLECT_DELAY_SECONDS = 30
 # Seeding uses one request per item, so keep it to a handful as the wiki asks.
 MAX_SEED_ITEMS = 10
-
-SECONDS_PER_DAY = 24 * 60 * 60
 
 
 class PriceSource(Protocol):
